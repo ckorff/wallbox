@@ -110,3 +110,12 @@ REPORT_RECIPIENT_EMAIL = env('REPORT_RECIPIENT_EMAIL', default='')
 # KEBA wallbox connection (Modbus TCP).
 KEBA_HOST = env('KEBA_HOST', default='')
 KEBA_PORT = env.int('KEBA_PORT', default=502)
+
+
+# OCPP 1.6-J server. The wallbox connects to this backend over WebSocket
+# and pushes session events; this is the source of truth for charging
+# session capture.
+OCPP_LISTEN_HOST = env('OCPP_LISTEN_HOST', default='0.0.0.0')
+OCPP_LISTEN_PORT = env.int('OCPP_LISTEN_PORT', default=9000)
+OCPP_BASIC_AUTH_USERNAME = env('OCPP_BASIC_AUTH_USERNAME', default='')
+OCPP_BASIC_AUTH_PASSWORD = env('OCPP_BASIC_AUTH_PASSWORD', default='')

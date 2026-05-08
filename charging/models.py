@@ -33,6 +33,9 @@ class ChargingSession(models.Model):
     meter_start = models.DecimalField(max_digits=12, decimal_places=3)
     meter_end = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
     note = models.TextField(blank=True)
+    # The wallbox-side OCPP transaction ID. Null for manual entries; unique
+    # per OCPP-captured session so StopTransaction can find the row to close.
+    ocpp_transaction_id = models.PositiveIntegerField(null=True, blank=True, unique=True)
 
     class Meta:
         ordering = ['-start']

@@ -143,6 +143,34 @@ class ChargingSessionTests(TestCase):
                 meter_end=Decimal('999.000'),
             )
 
+    def test_ocpp_transaction_id_is_unique_when_set(self):
+        ChargingSession.objects.create(
+            start=self._dt(18, 0),
+            kwh=Decimal('0.000'),
+            meter_start=Decimal('0.000'),
+            ocpp_transaction_id=42,
+        )
+        with self.assertRaises(IntegrityError):
+            ChargingSession.objects.create(
+                start=self._dt(20, 0),
+                kwh=Decimal('0.000'),
+                meter_start=Decimal('0.000'),
+                ocpp_transaction_id=42,
+            )
+
+    def test_multiple_sessions_without_ocpp_transaction_id_allowed(self):
+        ChargingSession.objects.create(
+            start=self._dt(8, 0),
+            kwh=Decimal('1.000'),
+            meter_start=Decimal('0.000'),
+        )
+        # Manual entries don't have a transaction ID; allow many of them.
+        ChargingSession.objects.create(
+            start=self._dt(9, 0),
+            kwh=Decimal('1.000'),
+            meter_start=Decimal('0.000'),
+        )
+
 
 class MonthlyHouseUsageTests(TestCase):
     def test_create_and_decimal_storage(self):

@@ -11,11 +11,20 @@ English**. Internal notes and this file may stay in English for consistency.
 ## Hardware Setup
 - **Wallbox:** KEBA P30 x-series (LAN/WLAN, IP configured in app settings)
 - **Vehicle:** Audi Q6 e-tron
-- **Communication:** Modbus TCP via Python (`pymodbus`)
-  - Rationale: the wallbox is on WLAN with ~600 ms latency. UDP
-    (KEBA's KeContact protocol) loses packets at that latency without
-    retransmission; TCP guarantees delivery.
-  - Modbus TCP must be enabled in the KEBA firmware (Setup menu).
+- **Communication:**
+  - **Session capture: OCPP 1.6-J** (WebSocket, push-based). The wallbox
+    is the Charge Point and connects out to this backend at
+    `ws://<host>:<OCPP_LISTEN_PORT>/ocpp/<chargeBoxId>` with HTTP basic
+    auth. `StartTransaction` / `StopTransaction` events are the source
+    of truth for billing — every session is delivered as an event over
+    a reliable channel.
+  - **Live status: Modbus TCP** via `pymodbus`. Used by `manage.py
+    keba_status` for diagnostic snapshots; not used for session
+    capture.
+  - Both interfaces can run simultaneously on KEBA P30. The wallbox
+    listens on TCP/502 for Modbus; the OCPP backend URL is configured
+    in the wallbox web UI.
+  - Modbus TCP must be enabled in the KEBA firmware (DSW1.3 = ON).
 
 ## Tariff (as of May 2026)
 - **Energy price:** 38.5 ct/kWh
@@ -53,9 +62,26 @@ English**. Internal notes and this file may stay in English for consistency.
 ```bash
 source .venv/bin/activate
 python manage.py runserver 0.0.0.0:8000   # reachable on LAN
+python manage.py ocpp_serve               # OCPP 1.6-J server (port 9000)
+python manage.py keba_status              # live wallbox snapshot via Modbus
 python manage.py makemigrations
 python manage.py migrate
 python manage.py test
+```
+
+## OCPP Wallbox Configuration
+In the KEBA web UI, configure the OCPP backend to:
+- Backend URL: `ws://<lxc-host>:9000/ocpp/keba-home`
+- ChargeBoxId: `keba-home` (must match the URL path segment)
+- Authentication: HTTP Basic Auth, username/password from `.env`
+- Subprotocol: `ocpp1.6`
+
+The systemd unit at `deploy/wallbox-ocpp.service` runs the OCPP server as
+a daemon. To install:
+```bash
+sudo cp deploy/wallbox-ocpp.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now wallbox-ocpp
 ```
 
 ## Initial Data Model (to be refined with Claude Code)
