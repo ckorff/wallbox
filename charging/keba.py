@@ -92,7 +92,7 @@ class PymodbusTransport:
         if not self._client.connected:
             self._client.connect()
         result = self._client.read_holding_registers(
-            address=register, count=2, slave=self._unit_id,
+            address=register, count=2, device_id=self._unit_id,
         )
         if result.isError():
             raise KebaError(f'KEBA read failed at register {register}: {result}')

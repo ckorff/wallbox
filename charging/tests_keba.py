@@ -1,9 +1,17 @@
 from decimal import Decimal
+from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 
 from charging import keba
-from charging.keba import ChargingState, KebaClient, KebaError, KebaState
+from charging.keba import (
+    KEBA_UNIT_ID,
+    ChargingState,
+    KebaClient,
+    KebaError,
+    KebaState,
+    PymodbusTransport,
+)
 
 
 class FakeTransport:
@@ -72,3 +80,28 @@ class KebaClientCloseTests(SimpleTestCase):
         transport = FakeTransport({})
         KebaClient(transport).close()
         self.assertTrue(transport.closed)
+
+
+class PymodbusTransportCallSignatureTests(SimpleTestCase):
+    """Pin down how PymodbusTransport invokes the pymodbus client.
+
+    Catches breakages from upstream API renames (e.g. slave -> device_id
+    in pymodbus 3.x) that would otherwise only surface against a real wallbox.
+    """
+
+    def test_read_uint32_passes_device_id_and_count(self):
+        with patch('pymodbus.client.ModbusTcpClient') as ClientCls:
+            client = ClientCls.return_value
+            client.connected = True
+            response = MagicMock()
+            response.isError.return_value = False
+            response.registers = [0x0001, 0x2345]  # uint32 = 0x00012345
+            client.read_holding_registers.return_value = response
+
+            transport = PymodbusTransport('192.0.2.1')
+            value = transport.read_uint32(1000)
+
+        self.assertEqual(value, 0x00012345)
+        client.read_holding_registers.assert_called_once_with(
+            address=1000, count=2, device_id=KEBA_UNIT_ID,
+        )
