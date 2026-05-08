@@ -43,34 +43,35 @@ class KebaClientReadStateTests(SimpleTestCase):
         return FakeTransport(registers)
 
     def test_returns_keba_state(self):
-        client = KebaClient(self._transport())
+        client = KebaClient(self._transport(), read_interval_s=0)
         state = client.read_state()
         self.assertIsInstance(state, KebaState)
 
     def test_charging_state_decoded_to_enum(self):
-        client = KebaClient(self._transport())
+        client = KebaClient(self._transport(), read_interval_s=0)
         self.assertEqual(client.read_state().charging_state, ChargingState.CHARGING)
 
     def test_suspended_state_decoded(self):
-        client = KebaClient(self._transport(
-            {keba.REG_CHARGING_STATE: ChargingState.SUSPENDED.value},
-        ))
+        client = KebaClient(
+            self._transport({keba.REG_CHARGING_STATE: ChargingState.SUSPENDED.value}),
+            read_interval_s=0,
+        )
         self.assertEqual(client.read_state().charging_state, ChargingState.SUSPENDED)
 
     def test_energy_registers_converted_to_decimal_kwh(self):
-        client = KebaClient(self._transport())
+        client = KebaClient(self._transport(), read_interval_s=0)
         state = client.read_state()
         self.assertIsInstance(state.total_energy_kwh, Decimal)
         self.assertEqual(state.total_energy_kwh, Decimal('1234.5678'))
         self.assertEqual(state.session_energy_kwh, Decimal('42.5000'))
 
     def test_unknown_charging_state_raises(self):
-        client = KebaClient(self._transport({keba.REG_CHARGING_STATE: 999}))
+        client = KebaClient(self._transport({keba.REG_CHARGING_STATE: 999}), read_interval_s=0)
         with self.assertRaises(KebaError):
             client.read_state()
 
     def test_transport_failure_propagates_as_kebaerror(self):
-        client = KebaClient(FakeTransport({}, fail=True))
+        client = KebaClient(FakeTransport({}, fail=True), read_interval_s=0)
         with self.assertRaises(KebaError):
             client.read_state()
 
@@ -78,14 +79,13 @@ class KebaClientReadStateTests(SimpleTestCase):
 class KebaClientCloseTests(SimpleTestCase):
     def test_close_delegates_to_transport(self):
         transport = FakeTransport({})
-        KebaClient(transport).close()
+        KebaClient(transport, read_interval_s=0).close()
         self.assertTrue(transport.closed)
 
 
 class KebaClientWarmupTests(SimpleTestCase):
-    def test_warmup_does_one_read_against_total_energy_register(self):
-        transport = FakeTransport({keba.REG_TOTAL_ENERGY: 0})
-        # Wrap to count calls without losing the read behaviour.
+    def test_warmup_does_one_read_against_firmware_register(self):
+        transport = FakeTransport({keba.REG_FIRMWARE: 0})
         original = transport.read_uint32
         calls: list[int] = []
         def counting(register: int) -> int:
@@ -93,13 +93,35 @@ class KebaClientWarmupTests(SimpleTestCase):
             return original(register)
         transport.read_uint32 = counting  # type: ignore[assignment]
 
-        KebaClient(transport).warmup()
-        self.assertEqual(calls, [keba.REG_TOTAL_ENERGY])
+        KebaClient(transport, read_interval_s=0).warmup()
+        self.assertEqual(calls, [keba.REG_FIRMWARE])
 
     def test_warmup_swallows_kebaerror(self):
         transport = FakeTransport({}, fail=True)
-        # Should not raise even though every read errors.
-        KebaClient(transport).warmup()
+        KebaClient(transport, read_interval_s=0).warmup()
+
+
+class KebaClientReadIntervalTests(SimpleTestCase):
+    """Verify the >= 0.5 s gap between reads (KEBA spec) is honoured."""
+
+    def test_read_state_sleeps_between_reads(self):
+        transport = FakeTransport({
+            keba.REG_CHARGING_STATE: ChargingState.READY.value,
+            keba.REG_TOTAL_ENERGY: 0,
+            keba.REG_SESSION_ENERGY: 0,
+        })
+        with patch('charging.keba.time.sleep') as sleep:
+            KebaClient(transport, read_interval_s=0.5).read_state()
+        # Exactly one sleep between each of the three reads (so two sleeps).
+        self.assertEqual(sleep.call_count, 2)
+        for call in sleep.call_args_list:
+            self.assertEqual(call.args, (0.5,))
+
+    def test_warmup_sleeps_after_discard_read(self):
+        transport = FakeTransport({keba.REG_FIRMWARE: 0})
+        with patch('charging.keba.time.sleep') as sleep:
+            KebaClient(transport, read_interval_s=0.5).warmup()
+        sleep.assert_called_once_with(0.5)
 
 
 class PymodbusTransportCallSignatureTests(SimpleTestCase):
