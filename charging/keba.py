@@ -5,10 +5,12 @@ wallbox sits on Wi-Fi with ~600 ms latency, where UDP packet loss without
 retransmission was unreliable in practice.
 
 Register map and protocol details verified against the KEBA "KeContact P30
-Charging Station Modbus TCP Programmers Guide" V1.04 (2022); applies to
-both c-series and x-series. Each value is a UINT32 spanning two
-consecutive 16-bit registers, big-endian (hi register first), read via
-function code FC3 (read holding registers).
+Modbus TCP Programmers Guide" V1.07 (December 2025), KEBA document 132578,
+applicable to both c-series and x-series:
+https://www.keba.com/download/x/44932c2bc8/kecontactp30modbustcp_pgen.pdf
+
+Each value is a UINT32 spanning two consecutive 16-bit registers,
+big-endian (hi register first), read via function code FC3.
 
 Operational notes from the same reference:
 - Unit ID must be 255 (KEBA-specific; not the usual 1).
@@ -16,6 +18,11 @@ Operational notes from the same reference:
 - Minimum firmware: x-series 1.11 / c-series 3.10.16.
 - Modbus TCP and the UDP/KeContact interface are mutually exclusive.
 - Recommended read interval >= 0.5 s; write interval >= 5 s.
+
+Note: V1.04 of the same guide (which an earlier draft of this module
+followed) documented the energy registers as "Wh per LSB"; KEBA flagged
+this as a documentation error in V1.06 (July 2024) and the actual unit
+is 0.1 Wh per LSB.
 """
 
 from __future__ import annotations
@@ -31,9 +38,9 @@ REG_CHARGING_STATE = 1000
 REG_TOTAL_ENERGY = 1036
 REG_SESSION_ENERGY = 1502
 
-# KEBA reports energy in Wh per LSB; divide by 1000 to get kWh.
-_ENERGY_DIVISOR = Decimal(1_000)
-_ENERGY_QUANTUM = Decimal('0.001')
+# KEBA reports energy in 0.1 Wh per LSB; divide by 10000 to get kWh.
+_ENERGY_DIVISOR = Decimal(10_000)
+_ENERGY_QUANTUM = Decimal('0.0001')
 
 KEBA_UNIT_ID = 255
 
@@ -126,5 +133,5 @@ class KebaClient:
         self._transport.close()
 
     @staticmethod
-    def _decode_energy(raw_wh: int) -> Decimal:
-        return (Decimal(raw_wh) / _ENERGY_DIVISOR).quantize(_ENERGY_QUANTUM)
+    def _decode_energy(raw_units_of_0_1_wh: int) -> Decimal:
+        return (Decimal(raw_units_of_0_1_wh) / _ENERGY_DIVISOR).quantize(_ENERGY_QUANTUM)
