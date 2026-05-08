@@ -89,11 +89,17 @@ class PymodbusTransport:
         self._unit_id = unit_id
 
     def read_uint32(self, register: int) -> int:
+        # Lazy import so SimpleTestCase tests don't have to hit pymodbus.
+        from pymodbus.exceptions import ModbusException
+
         if not self._client.connected:
             self._client.connect()
-        result = self._client.read_holding_registers(
-            address=register, count=2, device_id=self._unit_id,
-        )
+        try:
+            result = self._client.read_holding_registers(
+                address=register, count=2, device_id=self._unit_id,
+            )
+        except (ModbusException, ConnectionError, OSError) as exc:
+            raise KebaError(f'KEBA read failed at register {register}: {exc}') from exc
         if result.isError():
             raise KebaError(f'KEBA read failed at register {register}: {result}')
         hi, lo = result.registers
@@ -111,7 +117,22 @@ class KebaClient:
 
     @classmethod
     def connect(cls, host: str, port: int = 502, unit_id: int = KEBA_UNIT_ID) -> 'KebaClient':
-        return cls(PymodbusTransport(host, port=port, unit_id=unit_id))
+        client = cls(PymodbusTransport(host, port=port, unit_id=unit_id))
+        client.warmup()
+        return client
+
+    def warmup(self) -> None:
+        """Discard one read so the first real read is not silently dropped.
+
+        On at least firmware 3.10.80, the very first holding-register read
+        after a fresh TCP connection is sometimes lost (the wallbox resets
+        the connection or fails to respond). A throwaway read of a known
+        register makes subsequent reads reliable.
+        """
+        try:
+            self._transport.read_uint32(REG_TOTAL_ENERGY)
+        except KebaError:
+            pass
 
     def read_state(self) -> KebaState:
         raw_state = self._transport.read_uint32(REG_CHARGING_STATE)

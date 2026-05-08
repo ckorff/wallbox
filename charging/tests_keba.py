@@ -82,6 +82,26 @@ class KebaClientCloseTests(SimpleTestCase):
         self.assertTrue(transport.closed)
 
 
+class KebaClientWarmupTests(SimpleTestCase):
+    def test_warmup_does_one_read_against_total_energy_register(self):
+        transport = FakeTransport({keba.REG_TOTAL_ENERGY: 0})
+        # Wrap to count calls without losing the read behaviour.
+        original = transport.read_uint32
+        calls: list[int] = []
+        def counting(register: int) -> int:
+            calls.append(register)
+            return original(register)
+        transport.read_uint32 = counting  # type: ignore[assignment]
+
+        KebaClient(transport).warmup()
+        self.assertEqual(calls, [keba.REG_TOTAL_ENERGY])
+
+    def test_warmup_swallows_kebaerror(self):
+        transport = FakeTransport({}, fail=True)
+        # Should not raise even though every read errors.
+        KebaClient(transport).warmup()
+
+
 class PymodbusTransportCallSignatureTests(SimpleTestCase):
     """Pin down how PymodbusTransport invokes the pymodbus client.
 
@@ -105,3 +125,15 @@ class PymodbusTransportCallSignatureTests(SimpleTestCase):
         client.read_holding_registers.assert_called_once_with(
             address=1000, count=2, device_id=KEBA_UNIT_ID,
         )
+
+    def test_connection_error_becomes_kebaerror(self):
+        with patch('pymodbus.client.ModbusTcpClient') as ClientCls:
+            client = ClientCls.return_value
+            client.connected = True
+            client.read_holding_registers.side_effect = ConnectionResetError(
+                'connection reset by peer',
+            )
+            transport = PymodbusTransport('192.0.2.1')
+            with self.assertRaises(KebaError) as ctx:
+                transport.read_uint32(1000)
+        self.assertIn('connection reset by peer', str(ctx.exception))
