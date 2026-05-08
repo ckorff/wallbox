@@ -1,10 +1,10 @@
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from django.db import IntegrityError
 from django.test import TestCase
 
-from charging.models import Tariff
+from charging.models import ChargingSession, Tariff
 
 
 class TariffStorageTests(TestCase):
@@ -73,3 +73,70 @@ class TariffForDateTests(TestCase):
         )
         self.assertIsNone(Tariff.for_date(date(2026, 12, 31)))
         self.assertEqual(Tariff.for_date(date(2027, 1, 1)), future)
+
+
+class ChargingSessionTests(TestCase):
+    def _dt(self, hour: int, minute: int = 0) -> datetime:
+        return datetime(2026, 5, 8, hour, minute, tzinfo=timezone.utc)
+
+    def test_create_completed_session(self):
+        session = ChargingSession.objects.create(
+            start=self._dt(18, 0),
+            end=self._dt(21, 30),
+            kwh=Decimal('42.500'),
+            meter_start=Decimal('1234.000'),
+            meter_end=Decimal('1276.500'),
+            note='evening top-up',
+        )
+        session.refresh_from_db()
+        self.assertEqual(session.kwh, Decimal('42.500'))
+        self.assertEqual(session.meter_end - session.meter_start, Decimal('42.500'))
+        self.assertEqual(session.note, 'evening top-up')
+
+    def test_in_progress_session_allows_null_end_and_meter_end(self):
+        session = ChargingSession.objects.create(
+            start=self._dt(18, 0),
+            kwh=Decimal('0.000'),
+            meter_start=Decimal('1234.000'),
+        )
+        session.refresh_from_db()
+        self.assertIsNone(session.end)
+        self.assertIsNone(session.meter_end)
+        self.assertEqual(session.note, '')
+
+    def test_default_ordering_is_newest_first(self):
+        older = ChargingSession.objects.create(
+            start=self._dt(8, 0),
+            end=self._dt(9, 0),
+            kwh=Decimal('5.000'),
+            meter_start=Decimal('1000.000'),
+            meter_end=Decimal('1005.000'),
+        )
+        newer = ChargingSession.objects.create(
+            start=self._dt(20, 0),
+            end=self._dt(21, 0),
+            kwh=Decimal('5.000'),
+            meter_start=Decimal('1005.000'),
+            meter_end=Decimal('1010.000'),
+        )
+        self.assertEqual(list(ChargingSession.objects.all()), [newer, older])
+
+    def test_end_before_start_is_rejected(self):
+        with self.assertRaises(IntegrityError):
+            ChargingSession.objects.create(
+                start=self._dt(20, 0),
+                end=self._dt(19, 0),
+                kwh=Decimal('1.000'),
+                meter_start=Decimal('1000.000'),
+                meter_end=Decimal('1001.000'),
+            )
+
+    def test_meter_end_below_meter_start_is_rejected(self):
+        with self.assertRaises(IntegrityError):
+            ChargingSession.objects.create(
+                start=self._dt(20, 0),
+                end=self._dt(21, 0),
+                kwh=Decimal('1.000'),
+                meter_start=Decimal('1000.000'),
+                meter_end=Decimal('999.000'),
+            )
