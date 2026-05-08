@@ -80,11 +80,14 @@ python manage.py test
 - **SMTP server:** to be decided (own server / IONOS / Mailgun / Gmail SMTP / …)
 - **Recipient email:** work email address goes into `.env`
 - **KEBA IP:** stored in app settings once the integration begins
-- **KEBA register map:** find the registers for charged energy per session,
-  total energy, session ID and charging state in the official KEBA Modbus docs
 - **Behaviour when household consumption is missing:** pause billing or
   generate the report without the base fee? – decide when implementing reports
-- **Modbus TCP** must be enabled in the KEBA firmware (one-time hardware setup)
+- **Modbus TCP** must be enabled in the KEBA firmware (DIP switch DSW1.3 = ON,
+  unit ID = 255). Minimum firmware: x-series 1.11. Modbus TCP and the
+  UDP/KeContact interface are mutually exclusive.
+- **No session ID register exists** in the KEBA Modbus map — new charging
+  sessions must be detected from `charging_state` transitions or from the
+  session-energy register resetting to 0.
 
 ## What Claude Should Do
 - For new features: write the test first, then the implementation (TDD)

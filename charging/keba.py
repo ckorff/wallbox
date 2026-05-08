@@ -4,8 +4,18 @@ Modbus is used over TCP — and not the KeContact UDP protocol — because the
 wallbox sits on Wi-Fi with ~600 ms latency, where UDP packet loss without
 retransmission was unreliable in practice.
 
-Register addresses below are PLACEHOLDERS. Replace them with values from
-the official KEBA P30 Modbus reference before talking to a real wallbox.
+Register map and protocol details verified against the KEBA "KeContact P30
+Charging Station Modbus TCP Programmers Guide" V1.04 (2022); applies to
+both c-series and x-series. Each value is a UINT32 spanning two
+consecutive 16-bit registers, big-endian (hi register first), read via
+function code FC3 (read holding registers).
+
+Operational notes from the same reference:
+- Unit ID must be 255 (KEBA-specific; not the usual 1).
+- Modbus TCP must be enabled on the wallbox (DSW1.3 = ON).
+- Minimum firmware: x-series 1.11 / c-series 3.10.16.
+- Modbus TCP and the UDP/KeContact interface are mutually exclusive.
+- Recommended read interval >= 0.5 s; write interval >= 5 s.
 """
 
 from __future__ import annotations
@@ -16,33 +26,28 @@ from enum import IntEnum
 from typing import Protocol
 
 
-# TODO: confirm against the official KEBA P30 Modbus reference document.
-# These addresses are placeholders chosen so the structure compiles; do not
-# point this client at a real wallbox until they have been verified.
+# UINT32 register addresses (FC3, width=2, big-endian).
 REG_CHARGING_STATE = 1000
 REG_TOTAL_ENERGY = 1036
-REG_SESSION_ENERGY = 1040
-REG_SESSION_ID = 1500
+REG_SESSION_ENERGY = 1502
 
-# KEBA reports energy in 0.1 Wh per LSB; divide by 10000 to get kWh.
-_ENERGY_DIVISOR = Decimal(10_000)
-# Quantize to 4 decimal places so the Decimal output is consistent.
-_ENERGY_QUANTUM = Decimal('0.0001')
+# KEBA reports energy in Wh per LSB; divide by 1000 to get kWh.
+_ENERGY_DIVISOR = Decimal(1_000)
+_ENERGY_QUANTUM = Decimal('0.001')
+
+KEBA_UNIT_ID = 255
 
 
 class ChargingState(IntEnum):
-    """KEBA P30 charging state values (function code 03, single uint32 register).
-
-    Values are taken from the KEBA Modbus reference; verify before relying on
-    them in production.
-    """
+    """KEBA P30 charging state, verified against the V1.04 Modbus guide."""
 
     STARTUP = 0
     NOT_READY = 1
     READY = 2
     CHARGING = 3
     ERROR = 4
-    AUTHORIZATION_REJECTED = 5
+    # Charging temporarily interrupted: over-temperature or suspended mode.
+    SUSPENDED = 5
 
 
 class KebaError(RuntimeError):
@@ -54,7 +59,6 @@ class KebaState:
     charging_state: ChargingState
     total_energy_kwh: Decimal
     session_energy_kwh: Decimal
-    session_id: int
 
 
 class KebaTransport(Protocol):
@@ -69,7 +73,7 @@ class PymodbusTransport:
     encoded big-endian, which is what the P30 Modbus map specifies.
     """
 
-    def __init__(self, host: str, port: int = 502, unit_id: int = 1, timeout: float = 3.0):
+    def __init__(self, host: str, port: int = 502, unit_id: int = KEBA_UNIT_ID, timeout: float = 3.0):
         # Imported lazily so tests that use a fake transport don't need
         # pymodbus installed.
         from pymodbus.client import ModbusTcpClient
@@ -99,7 +103,7 @@ class KebaClient:
         self._transport = transport
 
     @classmethod
-    def connect(cls, host: str, port: int = 502, unit_id: int = 1) -> 'KebaClient':
+    def connect(cls, host: str, port: int = 502, unit_id: int = KEBA_UNIT_ID) -> 'KebaClient':
         return cls(PymodbusTransport(host, port=port, unit_id=unit_id))
 
     def read_state(self) -> KebaState:
@@ -111,18 +115,16 @@ class KebaClient:
 
         total = self._decode_energy(self._transport.read_uint32(REG_TOTAL_ENERGY))
         session = self._decode_energy(self._transport.read_uint32(REG_SESSION_ENERGY))
-        session_id = self._transport.read_uint32(REG_SESSION_ID)
 
         return KebaState(
             charging_state=charging_state,
             total_energy_kwh=total,
             session_energy_kwh=session,
-            session_id=session_id,
         )
 
     def close(self) -> None:
         self._transport.close()
 
     @staticmethod
-    def _decode_energy(raw_units_of_0_1_wh: int) -> Decimal:
-        return (Decimal(raw_units_of_0_1_wh) / _ENERGY_DIVISOR).quantize(_ENERGY_QUANTUM)
+    def _decode_energy(raw_wh: int) -> Decimal:
+        return (Decimal(raw_wh) / _ENERGY_DIVISOR).quantize(_ENERGY_QUANTUM)
