@@ -50,3 +50,24 @@ class ChargingSession(models.Model):
     def __str__(self) -> str:
         end = self.end.isoformat() if self.end else 'in progress'
         return f'{self.start.isoformat()} -> {end} ({self.kwh} kWh)'
+
+
+class MonthlyHouseUsage(models.Model):
+    """Total household electricity consumption for a calendar month, entered manually."""
+
+    year = models.PositiveSmallIntegerField()
+    month = models.PositiveSmallIntegerField()
+    household_kwh = models.DecimalField(max_digits=10, decimal_places=3)
+
+    class Meta:
+        ordering = ['-year', '-month']
+        constraints = [
+            models.UniqueConstraint(fields=['year', 'month'], name='monthlyhouseusage_year_month_unique'),
+            CheckConstraint(
+                check=Q(month__gte=1) & Q(month__lte=12),
+                name='monthlyhouseusage_month_range',
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.year}-{self.month:02d}: {self.household_kwh} kWh'

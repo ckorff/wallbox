@@ -4,7 +4,7 @@ from decimal import Decimal
 from django.db import IntegrityError
 from django.test import TestCase
 
-from charging.models import ChargingSession, Tariff
+from charging.models import ChargingSession, MonthlyHouseUsage, Tariff
 
 
 class TariffStorageTests(TestCase):
@@ -139,4 +139,37 @@ class ChargingSessionTests(TestCase):
                 kwh=Decimal('1.000'),
                 meter_start=Decimal('1000.000'),
                 meter_end=Decimal('999.000'),
+            )
+
+
+class MonthlyHouseUsageTests(TestCase):
+    def test_create_and_decimal_storage(self):
+        usage = MonthlyHouseUsage.objects.create(
+            year=2026,
+            month=5,
+            household_kwh=Decimal('312.450'),
+        )
+        usage.refresh_from_db()
+        self.assertIsInstance(usage.household_kwh, Decimal)
+        self.assertEqual(usage.household_kwh, Decimal('312.450'))
+
+    def test_year_month_is_unique(self):
+        MonthlyHouseUsage.objects.create(
+            year=2026, month=5, household_kwh=Decimal('300.000'),
+        )
+        with self.assertRaises(IntegrityError):
+            MonthlyHouseUsage.objects.create(
+                year=2026, month=5, household_kwh=Decimal('301.000'),
+            )
+
+    def test_month_below_1_is_rejected(self):
+        with self.assertRaises(IntegrityError):
+            MonthlyHouseUsage.objects.create(
+                year=2026, month=0, household_kwh=Decimal('1.000'),
+            )
+
+    def test_month_above_12_is_rejected(self):
+        with self.assertRaises(IntegrityError):
+            MonthlyHouseUsage.objects.create(
+                year=2026, month=13, household_kwh=Decimal('1.000'),
             )
