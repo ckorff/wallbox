@@ -1,7 +1,9 @@
 from datetime import datetime, timezone
 
+from django.contrib.auth import get_user_model
 from django.db import IntegrityError
 from django.test import TestCase
+from django.urls import reverse
 
 from reports.models import MonthlyReport
 
@@ -36,3 +38,19 @@ class MonthlyReportTests(TestCase):
         report.refresh_from_db()
         self.assertEqual(report.send_status, MonthlyReport.SendStatus.SENT)
         self.assertEqual(report.sent_at, sent_at)
+
+
+class MonthlyReportAdminSmokeTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = get_user_model().objects.create_superuser(
+            username='admin', email='admin@example.com', password='pw',
+        )
+
+    def setUp(self):
+        self.client.force_login(self.user)
+
+    def test_changelist(self):
+        MonthlyReport.objects.create(year=2026, month=5)
+        response = self.client.get(reverse('admin:reports_monthlyreport_changelist'))
+        self.assertEqual(response.status_code, 200)

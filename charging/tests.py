@@ -1,8 +1,10 @@
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
+from django.contrib.auth import get_user_model
 from django.db import IntegrityError
 from django.test import TestCase
+from django.urls import reverse
 
 from charging.models import ChargingSession, MonthlyHouseUsage, Tariff
 
@@ -173,3 +175,39 @@ class MonthlyHouseUsageTests(TestCase):
             MonthlyHouseUsage.objects.create(
                 year=2026, month=13, household_kwh=Decimal('1.000'),
             )
+
+
+class ChargingAdminSmokeTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = get_user_model().objects.create_superuser(
+            username='admin', email='admin@example.com', password='pw',
+        )
+
+    def setUp(self):
+        self.client.force_login(self.user)
+
+    def test_tariff_changelist(self):
+        Tariff.objects.create(
+            energy_price_ct_per_kwh=Decimal('38.5'),
+            base_fee_eur=Decimal('16.40'),
+            valid_from=date(2026, 5, 1),
+        )
+        response = self.client.get(reverse('admin:charging_tariff_changelist'))
+        self.assertEqual(response.status_code, 200)
+
+    def test_chargingsession_changelist(self):
+        ChargingSession.objects.create(
+            start=datetime(2026, 5, 8, 18, tzinfo=timezone.utc),
+            end=datetime(2026, 5, 8, 21, tzinfo=timezone.utc),
+            kwh=Decimal('40.000'),
+            meter_start=Decimal('1000.000'),
+            meter_end=Decimal('1040.000'),
+        )
+        response = self.client.get(reverse('admin:charging_chargingsession_changelist'))
+        self.assertEqual(response.status_code, 200)
+
+    def test_monthlyhouseusage_changelist(self):
+        MonthlyHouseUsage.objects.create(year=2026, month=5, household_kwh=Decimal('300.000'))
+        response = self.client.get(reverse('admin:charging_monthlyhouseusage_changelist'))
+        self.assertEqual(response.status_code, 200)
