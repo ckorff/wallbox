@@ -58,23 +58,25 @@
       margin: 1.6em 0 0.6em 0;
     }
 
-    .reporter-info dl {
-      display: flex;
-      flex-wrap: wrap;
+    dl.reporter-info {
       margin: 0;
+    }
+    .reporter-info .row {
+      display: flex;
+      align-items: baseline;
+      margin-bottom: 0.3em;
     }
     .reporter-info dt {
-      flex: 0 0 6em;
-      width: 6em;
+      flex: 0 0 9em;
       text-align: right;
+      padding-right: 1em;
       color: var(--color-muted);
-      padding: 0.3em 0;
+      font-weight: 400;
+      white-space: nowrap;
     }
     .reporter-info dd {
-      flex: 0 0 calc(100% - 6em);
-      width: calc(100% - 6em);
+      flex: 1 1 auto;
       margin: 0;
-      padding: 0.3em 0 0.3em 1em;
       font-weight: 500;
     }
 
@@ -146,24 +148,15 @@
 
   <h1>Charging Cost Report — {{ period_start|date:"F Y" }}</h1>
 
-  <div class="reporter-info">
-    <dl>
-      <dt>Reporter</dt>
-      <dd>{{ reporter_name }}</dd>
-      <dt>Employee ID</dt>
-      <dd>{{ reporter_employee_id }}</dd>
-      <dt>Vehicle</dt>
-      <dd>{{ vehicle_make_model }}</dd>
-      <dt>License plate</dt>
-      <dd>{{ vehicle_license_plate }}</dd>
-      <dt>Charging location</dt>
-      <dd>{{ charging_location|linebreaksbr }}</dd>
-      <dt>Reporting period</dt>
-      <dd>{{ period_start.day }} – {{ period_end|date:"j F Y" }}</dd>
-      <dt>Generated</dt>
-      <dd>{{ generation_date|date:"j F Y" }}</dd>
-    </dl>
-  </div>
+  <dl class="reporter-info">
+    <div class="row"><dt>Reporter</dt><dd>{{ reporter_name }}</dd></div>
+    <div class="row"><dt>Employee ID</dt><dd>{{ reporter_employee_id }}</dd></div>
+    <div class="row"><dt>Vehicle</dt><dd>{{ vehicle_make_model }}</dd></div>
+    <div class="row"><dt>License plate</dt><dd>{{ vehicle_license_plate }}</dd></div>
+    <div class="row"><dt>Charging location</dt><dd>{{ charging_location|linebreaksbr }}</dd></div>
+    <div class="row"><dt>Reporting period</dt><dd>{{ period_start.day }} – {{ period_end|date:"j F Y" }}</dd></div>
+    <div class="row"><dt>Generated</dt><dd>{{ generation_date|date:"j F Y" }}</dd></div>
+  </dl>
 
   <h2>Charging sessions</h2>
   {% if session_rows %}
