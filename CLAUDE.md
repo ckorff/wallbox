@@ -177,7 +177,6 @@ imports are a Phase 3 concern.
 ## PDF layout (English, professional, A4 portrait)
 - Header block:
   - Title (h1): "Charging Cost Report — <Month> <Year>"
-  - Subtitle: full reporting period ("1 – 31 May 2026"), muted, smaller
   - First info row (split): Reporter on the left, Generated date on the right
   - Remaining info rows (single column): Employee ID, Vehicle,
     License plate, Charging location

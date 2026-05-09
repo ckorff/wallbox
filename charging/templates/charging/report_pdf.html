@@ -44,15 +44,9 @@
     h1 {
       font-size: var(--fs-h1);
       font-weight: 600;
-      margin: 0 0 0.3em 0;
+      margin: 0 0 1.5em 0;
       padding-bottom: 0.3em;
       border-bottom: 2pt solid var(--color-accent);
-    }
-
-    .subtitle {
-      margin: 0 0 1.5em 0;
-      font-size: 11pt;
-      color: var(--color-muted);
     }
 
     h2 {
@@ -168,7 +162,6 @@
 <body>
 
   <h1>Charging Cost Report — {{ period_start|date:"F Y" }}</h1>
-  <p class="subtitle">{{ period_start.day }} – {{ period_end|date:"j F Y" }}</p>
 
   <dl class="reporter-info">
     <div class="row split">
