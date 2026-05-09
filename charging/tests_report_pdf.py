@@ -117,6 +117,15 @@ class ReportHtmlContentTests(TestCase):
         self.assertIn("€", html)
         self.assertIn("4.04", html)
 
+    def test_html_uses_css_custom_properties_for_design_tokens(self):
+        report = _seed_basic_report()
+        html = self._render_html(report)
+
+        # The :root design-token block is the foundation of the styling;
+        # asserting on the custom-property name guards against regressing
+        # to ad-hoc inline styles.
+        self.assertIn("--color-accent", html)
+
     def test_html_contains_a_row_per_session(self):
         report = _seed_basic_report()
         html = self._render_html(report)

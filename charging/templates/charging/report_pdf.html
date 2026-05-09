@@ -4,101 +4,141 @@
   <meta charset="utf-8">
   <title>Charging Cost Report — {{ period_start|date:"F Y" }}</title>
   <style>
+    :root {
+      --color-text: #1a1a1a;
+      --color-muted: #5f6368;
+      --color-rule: #d8dcde;
+      --color-accent: #1f6e6e;
+      --color-accent-soft: #e7f2f2;
+      --fs-base: 10pt;
+      --fs-h1: 18pt;
+      --fs-h2: 11pt;
+      --fs-grand: 14pt;
+    }
+
     @page {
-      size: A4 portrait;
-      margin: 18mm;
+      size: A4;
+      margin: 18mm 16mm;
       @bottom-right {
         content: counter(page) "/" counter(pages);
-        font-family: sans-serif;
-        font-size: 9pt;
-        color: #666;
+        font-family: "Liberation Sans", "DejaVu Sans", system-ui, sans-serif;
+        font-size: 8pt;
+        color: #5f6368;
       }
       @bottom-left {
         content: "Generated automatically from the KEBA P30 wallbox session log.";
-        font-family: sans-serif;
+        font-family: "Liberation Sans", "DejaVu Sans", system-ui, sans-serif;
         font-size: 8pt;
-        color: #666;
+        color: #5f6368;
       }
     }
+
     body {
-      font-family: "Helvetica", "Arial", sans-serif;
-      font-size: 10pt;
-      color: #222;
+      font-family: "Liberation Sans", "DejaVu Sans", system-ui, sans-serif;
+      font-size: var(--fs-base);
+      color: var(--color-text);
+      line-height: 1.45;
+      font-variant-numeric: tabular-nums;
     }
+
     h1 {
-      font-size: 18pt;
-      margin: 0 0 0.4em 0;
+      font-size: var(--fs-h1);
+      font-weight: 600;
+      margin: 0 0 1.5em 0;
+      padding-bottom: 0.3em;
+      border-bottom: 2pt solid var(--color-accent);
     }
-    .meta {
-      margin-bottom: 1.2em;
+
+    h2 {
+      font-size: var(--fs-h2);
+      font-weight: 600;
+      color: var(--color-accent);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin: 1.6em 0 0.6em 0;
     }
-    .meta dl {
-      display: grid;
-      grid-template-columns: max-content 1fr;
-      column-gap: 1em;
-      row-gap: 0.15em;
+
+    .reporter-info dl {
+      display: flex;
+      flex-wrap: wrap;
       margin: 0;
     }
-    .meta dt {
-      font-weight: bold;
-      color: #555;
+    .reporter-info dt {
+      flex: 0 0 6em;
+      width: 6em;
+      text-align: right;
+      color: var(--color-muted);
+      padding: 0.3em 0;
     }
-    .meta dd {
+    .reporter-info dd {
+      flex: 0 0 calc(100% - 6em);
+      width: calc(100% - 6em);
       margin: 0;
+      padding: 0.3em 0 0.3em 1em;
+      font-weight: 500;
     }
+
     table.sessions {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 0.4em;
-      font-size: 9.5pt;
     }
-    table.sessions th, table.sessions td {
-      border: 0.5pt solid #999;
-      padding: 0.25em 0.5em;
+    table.sessions thead th {
+      font-weight: 600;
+      border-bottom: 1pt solid var(--color-accent);
+      padding: 0.4em;
       text-align: left;
     }
-    table.sessions th {
-      background: #eee;
+    table.sessions thead th.num {
+      text-align: right;
     }
-    table.sessions td.num, table.sessions th.num {
+    table.sessions tbody td {
+      border-bottom: 1pt solid var(--color-rule);
+      padding: 0.4em;
+    }
+    table.sessions td.num {
       text-align: right;
     }
     table.sessions tfoot td {
-      font-weight: bold;
-      background: #f5f5f5;
+      border-top: 1pt solid var(--color-accent);
+      font-weight: 600;
+      padding: 0.4em;
     }
-    .summary {
-      margin-top: 1.4em;
-    }
-    .summary table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    .summary td {
-      padding: 0.2em 0;
-      vertical-align: top;
-    }
-    .summary td.label {
-      width: 60%;
-      color: #444;
-    }
-    .summary td.value {
+    table.sessions tfoot td.num {
       text-align: right;
     }
-    .grand-total {
-      margin-top: 1em;
-      padding-top: 0.6em;
-      border-top: 1pt solid #333;
-      font-size: 13pt;
-      font-weight: bold;
+
+    .summary {
+      page-break-inside: avoid;
+    }
+    .summary dl {
+      display: flex;
+      flex-wrap: wrap;
+      margin: 0 0 1em 0;
+    }
+    .summary dt {
+      flex: 0 0 60%;
+      width: 60%;
+      color: var(--color-muted);
+      padding: 0.3em 0;
+    }
+    .summary dd {
+      flex: 0 0 40%;
+      width: 40%;
+      margin: 0;
+      padding: 0.3em 0;
+      text-align: right;
+      font-weight: 500;
+    }
+
+    .grand {
       display: flex;
       justify-content: space-between;
-    }
-    h2 {
-      font-size: 11pt;
-      margin: 1.2em 0 0.3em 0;
-      border-bottom: 0.5pt solid #999;
-      padding-bottom: 0.15em;
+      align-items: baseline;
+      border-top: 1pt solid var(--color-accent);
+      background: var(--color-accent-soft);
+      padding: 0.5em 0.75em;
+      font-size: var(--fs-grand);
+      font-weight: 700;
     }
   </style>
 </head>
@@ -106,7 +146,7 @@
 
   <h1>Charging Cost Report — {{ period_start|date:"F Y" }}</h1>
 
-  <div class="meta">
+  <div class="reporter-info">
     <dl>
       <dt>Reporter</dt>
       <dd>{{ reporter_name }}</dd>
@@ -165,18 +205,14 @@
 
   <h2>Summary</h2>
   <div class="summary">
-    <table>
-      <tr>
-        <td class="label">Total energy charged at home</td>
-        <td class="value">{{ report.wallbox_kwh_total }} kWh</td>
-      </tr>
-      <tr>
-        <td class="label">Total energy cost</td>
-        <td class="value">€ {{ report.energy_cost_eur }}</td>
-      </tr>
-    </table>
+    <dl>
+      <dt>Total energy charged at home</dt>
+      <dd>{{ report.wallbox_kwh_total }} kWh</dd>
+      <dt>Total energy cost</dt>
+      <dd>€ {{ report.energy_cost_eur }}</dd>
+    </dl>
 
-    <div class="grand-total">
+    <div class="grand">
       <span>Grand total to be reimbursed</span>
       <span>€ {{ report.total_amount_eur }}</span>
     </div>
