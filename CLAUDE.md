@@ -148,15 +148,31 @@ python manage.py test
 
 ## UI (admin-only, `@staff_member_required`)
 
-1. **Tariff settings** at `/settings/tariff/` – form to add a new tariff
-   (`valid_from`, `energy_price_ct_per_kwh`). Below: list of historical
-   tariffs with the currently active one highlighted. No edit/delete of
-   existing tariffs.
-2. **Reports** at `/reports/` – list of months sorted desc, with per-row
-   state ("not generated" / "generated on …"), a "Generate" button per
-   month and a "Download PDF" link if available.
-3. Plain server-rendered Django templates. No SPA, no JS framework. A
-   small amount of inline CSS is fine; no Tailwind / Bootstrap.
+All pages share a base template `templates/base.html` with a top
+navigation bar showing: Wallbox (logo/title, links to dashboard),
+Tariff settings, Reports, Admin, Logout (right-aligned, with the
+current username next to it). The active page's nav link is visually
+highlighted.
+
+1. **Dashboard** at `/dashboard/` (root `/` redirects here):
+   - Status block (read-only): total number of charging sessions,
+     timestamp of the most recently imported session, total energy
+     captured (kWh), and the last generated `MonthlyReport`
+     (year-month + generated_at) if any.
+   - Action block:
+     - "Run import now" – POST form that runs `keba_import`
+       synchronously and redirects back with a success message
+       (number of newly imported sessions) or error message.
+     - "Open latest report" – link to the most recent `MonthlyReport`'s
+       PDF if any, else disabled with a hint.
+2. **Tariff settings** at `/settings/tariff/`
+3. **Reports** at `/reports/`
+4. Plain server-rendered Django templates. No SPA, no JS framework.
+   Minimal inline CSS in the base template; no Tailwind / Bootstrap.
+
+The "Run import now" button is intentionally synchronous for now – it
+blocks for a few seconds while the wallbox is queried. Async/queued
+imports are a Phase 3 concern.
 
 ## PDF layout (English, professional, A4 portrait)
 - Header block (single column, label + value rows):
