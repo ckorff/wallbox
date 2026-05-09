@@ -8,23 +8,23 @@ to the user's employer. Vehicle: Audi Q6 e-tron (company car).
 The employer is international: **all UI, PDF reports and emails are in
 English**. Internal notes and this file may stay in English for consistency.
 
+## Current phase: Phase 1
+Focus right now is **only** to capture charging sessions from the wallbox
+into the database. Out of scope until later:
+- Tariffs, household consumption, cost calculation
+- PDF generation, email delivery
+- Any web UI beyond the Django admin
+
+When in doubt, do less, not more.
+
 ## Hardware Setup
 - **Wallbox:** KEBA P30 x-series (LAN/WLAN, IP configured in app settings)
 - **Vehicle:** Audi Q6 e-tron
-- **Communication:**
-  - **Session capture: OCPP 1.6-J** (WebSocket, push-based). The wallbox
-    is the Charge Point and connects out to this backend at
-    `ws://<host>:<OCPP_LISTEN_PORT>/ocpp/<chargeBoxId>` with HTTP basic
-    auth. `StartTransaction` / `StopTransaction` events are the source
-    of truth for billing — every session is delivered as an event over
-    a reliable channel.
-  - **Live status: Modbus TCP** via `pymodbus`. Used by `manage.py
-    keba_status` for diagnostic snapshots; not used for session
-    capture.
-  - Both interfaces can run simultaneously on KEBA P30. The wallbox
-    listens on TCP/502 for Modbus; the OCPP backend URL is configured
-    in the wallbox web UI.
-  - Modbus TCP must be enabled in the KEBA firmware (DSW1.3 = ON).
+- - **Communication:** UDP via Python's `socket` module (no extra library)
+  - KEBA exposes a UDP-based report protocol on port 7090
+  - Commands `report 100` … `report 130` return the latest 30 sessions as JSON
+  - UDP is fine for low-frequency polling of historical sessions; we are not
+    polling live state at high frequency, so the WLAN latency is acceptable.
 
 ## Tariff (as of May 2026)
 - **Energy price:** 38.5 ct/kWh
