@@ -46,13 +46,6 @@
     .meta dd {
       margin: 0;
     }
-    .warning {
-      border: 1.5pt solid #b8860b;
-      background: #fff7e0;
-      padding: 0.6em 0.8em;
-      margin: 0 0 1em 0;
-      font-weight: bold;
-    }
     table.sessions {
       width: 100%;
       border-collapse: collapse;
@@ -92,11 +85,6 @@
     .summary td.value {
       text-align: right;
     }
-    .formula {
-      font-family: "Courier New", monospace;
-      font-size: 9.5pt;
-      color: #444;
-    }
     .grand-total {
       margin-top: 1em;
       padding-top: 0.6em;
@@ -128,13 +116,6 @@
       <dd>{{ generation_date|date:"d.m.Y" }}</dd>
     </dl>
   </div>
-
-  {% if report.warning_house_usage_missing %}
-    <div class="warning">
-      Household consumption for {{ month_label }} not yet recorded;
-      base fee not included in this report.
-    </div>
-  {% endif %}
 
   <h2>Charging sessions</h2>
   {% if session_rows %}
@@ -184,30 +165,6 @@
       <tr>
         <td class="label">Total energy cost</td>
         <td class="value">€ {{ report.energy_cost_eur }}</td>
-      </tr>
-      <tr>
-        <td class="label">Total household consumption</td>
-        <td class="value">
-          {% if report.house_kwh_total is not None %}
-            {{ report.house_kwh_total }} kWh
-          {% else %}
-            not recorded
-          {% endif %}
-        </td>
-      </tr>
-      <tr>
-        <td class="label">Pro-rated base fee</td>
-        <td class="value">
-          {% if report.house_kwh_total is not None and month_start_tariff %}
-            <span class="formula">
-              ({{ report.wallbox_kwh_total }} / {{ report.house_kwh_total }})
-              × {{ month_start_tariff.base_fee_eur_per_month }}
-            </span>
-            = € {{ report.prorated_base_fee_eur }}
-          {% else %}
-            not applicable
-          {% endif %}
-        </td>
       </tr>
     </table>
 

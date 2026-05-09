@@ -43,7 +43,6 @@
         <tr>
           <th>Valid from</th>
           <th>Energy price (ct/kWh)</th>
-          <th>Base fee (€/month)</th>
           <th>Active</th>
         </tr>
       </thead>
@@ -52,7 +51,6 @@
           <tr class="{% if active_tariff and t.pk == active_tariff.pk %}active{% endif %}">
             <td>{{ t.valid_from|date:"d.m.Y" }}</td>
             <td>{{ t.energy_price_ct_per_kwh }}</td>
-            <td>{{ t.base_fee_eur_per_month }}</td>
             <td>{% if active_tariff and t.pk == active_tariff.pk %}yes{% else %}&nbsp;{% endif %}</td>
           </tr>
         {% endfor %}

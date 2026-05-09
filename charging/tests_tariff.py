@@ -18,33 +18,28 @@ class TariffModelTests(TestCase):
         t = Tariff.objects.create(
             valid_from=date(2026, 5, 1),
             energy_price_ct_per_kwh=Decimal("38.500"),
-            base_fee_eur_per_month=Decimal("16.40"),
         )
         self.assertEqual(t.valid_from, date(2026, 5, 1))
         self.assertEqual(t.energy_price_ct_per_kwh, Decimal("38.500"))
-        self.assertEqual(t.base_fee_eur_per_month, Decimal("16.40"))
         self.assertIsNotNone(t.created_at)
 
     def test_valid_from_is_unique(self):
         Tariff.objects.create(
             valid_from=date(2026, 5, 1),
             energy_price_ct_per_kwh=Decimal("38.500"),
-            base_fee_eur_per_month=Decimal("16.40"),
         )
         with self.assertRaises(IntegrityError):
             Tariff.objects.create(
                 valid_from=date(2026, 5, 1),
                 energy_price_ct_per_kwh=Decimal("40.000"),
-                base_fee_eur_per_month=Decimal("17.00"),
             )
 
     def test_str_is_readable_summary(self):
         t = Tariff.objects.create(
             valid_from=date(2026, 5, 1),
             energy_price_ct_per_kwh=Decimal("38.500"),
-            base_fee_eur_per_month=Decimal("16.40"),
         )
-        self.assertEqual(str(t), "38.500 ct/kWh + 16.40 €/month from 2026-05-01")
+        self.assertEqual(str(t), "38.500 ct/kWh from 2026-05-01")
 
 
 class TariffForDateTests(TestCase):
@@ -55,7 +50,6 @@ class TariffForDateTests(TestCase):
         Tariff.objects.create(
             valid_from=date(2026, 5, 1),
             energy_price_ct_per_kwh=Decimal("38.500"),
-            base_fee_eur_per_month=Decimal("16.40"),
         )
         self.assertIsNone(Tariff.for_date(date(2026, 4, 30)))
 
@@ -63,17 +57,14 @@ class TariffForDateTests(TestCase):
         t1 = Tariff.objects.create(
             valid_from=date(2025, 1, 1),
             energy_price_ct_per_kwh=Decimal("30.000"),
-            base_fee_eur_per_month=Decimal("12.00"),
         )
         t2 = Tariff.objects.create(
             valid_from=date(2026, 1, 1),
             energy_price_ct_per_kwh=Decimal("35.000"),
-            base_fee_eur_per_month=Decimal("14.00"),
         )
         t3 = Tariff.objects.create(
             valid_from=date(2026, 5, 1),
             energy_price_ct_per_kwh=Decimal("38.500"),
-            base_fee_eur_per_month=Decimal("16.40"),
         )
 
         # before any tariff
@@ -113,12 +104,10 @@ class TariffSettingsViewTests(TestCase):
         t_old = Tariff.objects.create(
             valid_from=date(2025, 1, 1),
             energy_price_ct_per_kwh=Decimal("30.000"),
-            base_fee_eur_per_month=Decimal("12.00"),
         )
         t_active = Tariff.objects.create(
             valid_from=date(2026, 1, 1),
             energy_price_ct_per_kwh=Decimal("38.500"),
-            base_fee_eur_per_month=Decimal("16.40"),
         )
 
         self.client.force_login(self.staff_user)
@@ -138,7 +127,6 @@ class TariffSettingsViewTests(TestCase):
             data={
                 "valid_from": "01.05.2026",
                 "energy_price_ct_per_kwh": "38.500",
-                "base_fee_eur_per_month": "16.40",
             },
         )
         self.assertEqual(response.status_code, 302)
@@ -147,7 +135,6 @@ class TariffSettingsViewTests(TestCase):
         t = Tariff.objects.get()
         self.assertEqual(t.valid_from, date(2026, 5, 1))
         self.assertEqual(t.energy_price_ct_per_kwh, Decimal("38.500"))
-        self.assertEqual(t.base_fee_eur_per_month, Decimal("16.40"))
 
         # Follow the redirect to confirm the success message is rendered.
         followed = self.client.get(self.url)
@@ -163,7 +150,6 @@ class TariffSettingsViewTests(TestCase):
         Tariff.objects.create(
             valid_from=date(2026, 5, 1),
             energy_price_ct_per_kwh=Decimal("38.500"),
-            base_fee_eur_per_month=Decimal("16.40"),
         )
         self.client.force_login(self.staff_user)
         response = self.client.post(
@@ -171,7 +157,6 @@ class TariffSettingsViewTests(TestCase):
             data={
                 "valid_from": "01.05.2026",
                 "energy_price_ct_per_kwh": "40.000",
-                "base_fee_eur_per_month": "17.00",
             },
         )
         self.assertEqual(response.status_code, 200)
@@ -187,27 +172,10 @@ class TariffSettingsViewTests(TestCase):
             data={
                 "valid_from": "01.05.2026",
                 "energy_price_ct_per_kwh": "-1.000",
-                "base_fee_eur_per_month": "16.40",
             },
         )
         self.assertEqual(response.status_code, 200)
         form = response.context["form"]
         self.assertFalse(form.is_valid())
         self.assertIn("energy_price_ct_per_kwh", form.errors)
-        self.assertEqual(Tariff.objects.count(), 0)
-
-    def test_staff_post_with_negative_base_fee_rerenders_with_field_error(self):
-        self.client.force_login(self.staff_user)
-        response = self.client.post(
-            self.url,
-            data={
-                "valid_from": "01.05.2026",
-                "energy_price_ct_per_kwh": "38.500",
-                "base_fee_eur_per_month": "-0.01",
-            },
-        )
-        self.assertEqual(response.status_code, 200)
-        form = response.context["form"]
-        self.assertFalse(form.is_valid())
-        self.assertIn("base_fee_eur_per_month", form.errors)
         self.assertEqual(Tariff.objects.count(), 0)

@@ -46,9 +46,6 @@
             <td>
               {% if entry.report %}
                 Generated on {{ entry.report.generated_at|date:"d.m.Y H:i" }}
-                {% if entry.report.warning_house_usage_missing %}
-                  <span class="muted">(house usage missing)</span>
-                {% endif %}
               {% else %}
                 Not generated
               {% endif %}

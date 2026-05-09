@@ -7,12 +7,7 @@ from zoneinfo import ZoneInfo
 from django.test import TestCase, override_settings
 from django.template.loader import render_to_string
 
-from charging.models import (
-    ChargingSession,
-    MonthlyHouseUsage,
-    MonthlyReport,
-    Tariff,
-)
+from charging.models import ChargingSession, MonthlyReport, Tariff
 from charging.services.pdf import (
     attach_pdf_to_report,
     build_report_context,
@@ -39,17 +34,13 @@ def _dt(year, month, day, hour=12, minute=0):
 
 
 def _seed_basic_report(year=2026, month=5):
-    """Tariff + a couple of sessions + house usage + a generated report."""
+    """Tariff + a couple of sessions + a generated report."""
     Tariff.objects.create(
         valid_from=date(2026, 1, 1),
         energy_price_ct_per_kwh=Decimal("38.500"),
-        base_fee_eur_per_month=Decimal("16.40"),
     )
     _session(_dt(year, month, 5, 9, 30), Decimal("4.000"))
     _session(_dt(year, month, 17, 19, 15), Decimal("6.500"))
-    MonthlyHouseUsage.objects.create(
-        year=year, month=month, kwh_total=Decimal("400.000")
-    )
     return generate_monthly_report(year, month)
 
 
@@ -87,12 +78,10 @@ class ReportHtmlContentTests(TestCase):
         report = _seed_basic_report()
         html = self._render_html(report)
 
-        # Total = energy cost (10.5 × 0.385 = 4.0425 -> 4.04)
-        # + prorated base fee (10.5 / 400 × 16.40 = 0.4305 -> 0.43)
-        # = 4.47
-        self.assertEqual(report.total_amount_eur, Decimal("4.47"))
+        # Total = 10.5 × 0.385 = 4.0425 -> 4.04
+        self.assertEqual(report.total_amount_eur, Decimal("4.04"))
         self.assertIn("€", html)
-        self.assertIn("4.47", html)
+        self.assertIn("4.04", html)
 
     def test_html_contains_a_row_per_session(self):
         report = _seed_basic_report()
@@ -111,35 +100,6 @@ class ReportHtmlContentTests(TestCase):
         # Per-session dates present (DE numeric)
         self.assertIn("05.05.2026", html)
         self.assertIn("17.05.2026", html)
-
-    def test_html_warning_block_when_house_usage_missing(self):
-        Tariff.objects.create(
-            valid_from=date(2026, 1, 1),
-            energy_price_ct_per_kwh=Decimal("38.500"),
-            base_fee_eur_per_month=Decimal("16.40"),
-        )
-        _session(_dt(2026, 5, 10), Decimal("3.000"))
-        report = generate_monthly_report(2026, 5)
-        self.assertTrue(report.warning_house_usage_missing)
-
-        html = self._render_html(report)
-
-        lower = html.lower()
-        self.assertIn("household consumption", lower)
-        self.assertIn("may", lower)
-        self.assertIn("2026", html)
-
-    def test_html_no_warning_block_when_house_usage_present(self):
-        report = _seed_basic_report()
-        self.assertFalse(report.warning_house_usage_missing)
-
-        html = self._render_html(report)
-
-        # The warning text should not appear.
-        self.assertNotIn(
-            "not yet recorded",
-            html.lower(),
-        )
 
 
 @override_settings(MEDIA_ROOT=str(Path("/tmp/wallbox-test-media")))

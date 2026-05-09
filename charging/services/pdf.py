@@ -79,9 +79,6 @@ def build_report_context(report: MonthlyReport) -> dict:
             }
         )
 
-    # Pro-rated base fee formula display
-    month_start_tariff = Tariff.for_date(first_of_month)
-
     return {
         "report": report,
         "year": year,
@@ -94,7 +91,6 @@ def build_report_context(report: MonthlyReport) -> dict:
         "session_rows": rows,
         "session_kwh_total": report.wallbox_kwh_total,
         "session_cost_total": report.energy_cost_eur,
-        "month_start_tariff": month_start_tariff,
     }
 
 

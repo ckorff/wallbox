@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import ChargingSession, MonthlyHouseUsage, MonthlyReport, Tariff
+from .models import ChargingSession, MonthlyReport, Tariff
 
 
 @admin.register(ChargingSession)
@@ -22,13 +22,11 @@ class TariffAdmin(admin.ModelAdmin):
     list_display = (
         "valid_from",
         "energy_price_ct_per_kwh",
-        "base_fee_eur_per_month",
         "created_at",
     )
     readonly_fields = (
         "valid_from",
         "energy_price_ct_per_kwh",
-        "base_fee_eur_per_month",
         "created_at",
     )
 
@@ -42,19 +40,6 @@ class TariffAdmin(admin.ModelAdmin):
         return False
 
 
-@admin.register(MonthlyHouseUsage)
-class MonthlyHouseUsageAdmin(admin.ModelAdmin):
-    list_display = (
-        "year",
-        "month",
-        "meter_start_kwh",
-        "meter_end_kwh",
-        "kwh_total",
-    )
-    list_filter = ("year",)
-    ordering = ("-year", "-month")
-
-
 @admin.register(MonthlyReport)
 class MonthlyReportAdmin(admin.ModelAdmin):
     list_display = (
@@ -62,9 +47,7 @@ class MonthlyReportAdmin(admin.ModelAdmin):
         "month",
         "wallbox_kwh_total",
         "energy_cost_eur",
-        "prorated_base_fee_eur",
         "total_amount_eur",
-        "warning_house_usage_missing",
     )
     list_filter = ("year",)
     ordering = ("-year", "-month")

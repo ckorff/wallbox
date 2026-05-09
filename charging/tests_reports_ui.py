@@ -11,12 +11,7 @@ from django.core.management.base import CommandError
 from django.test import TestCase
 from django.urls import reverse
 
-from charging.models import (
-    ChargingSession,
-    MonthlyHouseUsage,
-    MonthlyReport,
-    Tariff,
-)
+from charging.models import ChargingSession, MonthlyReport, Tariff
 
 
 BERLIN = ZoneInfo("Europe/Berlin")
@@ -79,9 +74,7 @@ class ReportsViewListingTests(TestCase):
             month=12,
             wallbox_kwh_total=Decimal("0.000"),
             energy_cost_eur=Decimal("0.00"),
-            prorated_base_fee_eur=Decimal("0.00"),
             total_amount_eur=Decimal("0.00"),
-            warning_house_usage_missing=True,
         )
 
         response = self.client.get(reverse("reports_index"))
@@ -128,12 +121,8 @@ class ReportsViewGenerateTests(TestCase):
         Tariff.objects.create(
             valid_from=date(2026, 1, 1),
             energy_price_ct_per_kwh=Decimal("38.500"),
-            base_fee_eur_per_month=Decimal("16.40"),
         )
         _session(_dt(2026, 5, 10), Decimal("4.000"))
-        MonthlyHouseUsage.objects.create(
-            year=2026, month=5, kwh_total=Decimal("400.000")
-        )
 
     def test_post_triggers_generation_and_attach(self):
         with patch(
@@ -212,14 +201,10 @@ class GenerateReportCommandTests(TestCase):
         Tariff.objects.create(
             valid_from=date(2026, 1, 1),
             energy_price_ct_per_kwh=Decimal("38.500"),
-            base_fee_eur_per_month=Decimal("16.40"),
         )
 
     def test_runs_and_attaches_pdf(self):
         _session(_dt(2026, 5, 10), Decimal("4.000"))
-        MonthlyHouseUsage.objects.create(
-            year=2026, month=5, kwh_total=Decimal("400.000")
-        )
 
         out = StringIO()
         with patch(

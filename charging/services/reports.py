@@ -8,12 +8,7 @@ from zoneinfo import ZoneInfo
 from django.db import transaction
 from django.utils import timezone
 
-from charging.models import (
-    ChargingSession,
-    MonthlyHouseUsage,
-    MonthlyReport,
-    Tariff,
-)
+from charging.models import ChargingSession, MonthlyReport, Tariff
 
 
 BERLIN = ZoneInfo("Europe/Berlin")
@@ -59,7 +54,6 @@ def _resolve_tariff_used(year: int, month: int, next_first: date):
 @transaction.atomic
 def generate_monthly_report(year: int, month: int) -> MonthlyReport:
     start_dt, end_dt, next_first = _month_bounds(year, month)
-    first_of_month = date(year, month, 1)
 
     sessions = list(
         ChargingSession.objects.filter(
@@ -83,38 +77,16 @@ def generate_monthly_report(year: int, month: int) -> MonthlyReport:
             session.energy_kwh * tariff.energy_price_ct_per_kwh / _HUNDRED
         )
 
-    house_usage = MonthlyHouseUsage.objects.filter(year=year, month=month).first()
-    house_kwh_total = house_usage.effective_kwh if house_usage else None
-    warning_house_usage_missing = house_kwh_total is None
-
-    if warning_house_usage_missing:
-        prorated_base_fee_eur = Decimal("0.00")
-    else:
-        month_start_tariff = Tariff.for_date(first_of_month)
-        if month_start_tariff is None or wallbox_kwh_total == 0:
-            prorated_base_fee_eur = Decimal("0.00")
-        else:
-            base_fee_raw = (
-                (wallbox_kwh_total / house_kwh_total)
-                * month_start_tariff.base_fee_eur_per_month
-            )
-            prorated_base_fee_eur = _quantize_money(base_fee_raw)
-
     energy_cost_eur = _quantize_money(energy_cost_eur_raw)
-    total_amount_eur = _quantize_money(energy_cost_eur + prorated_base_fee_eur)
+    total_amount_eur = energy_cost_eur
 
     tariff_used = _resolve_tariff_used(year, month, next_first)
 
     defaults = {
         "wallbox_kwh_total": _quantize_kwh(wallbox_kwh_total),
         "energy_cost_eur": energy_cost_eur,
-        "house_kwh_total": (
-            _quantize_kwh(house_kwh_total) if house_kwh_total is not None else None
-        ),
-        "prorated_base_fee_eur": prorated_base_fee_eur,
         "total_amount_eur": total_amount_eur,
         "tariff_used": tariff_used,
-        "warning_house_usage_missing": warning_house_usage_missing,
         "generated_at": timezone.now(),
     }
 
