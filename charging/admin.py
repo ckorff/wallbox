@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import ChargingSession
+from .models import ChargingSession, Tariff
 
 
 @admin.register(ChargingSession)
@@ -15,3 +15,28 @@ class ChargingSessionAdmin(admin.ModelAdmin):
     list_filter = ("serial",)
     search_fields = ("serial",)
     readonly_fields = ("created_at", "updated_at", "raw_row")
+
+
+@admin.register(Tariff)
+class TariffAdmin(admin.ModelAdmin):
+    list_display = (
+        "valid_from",
+        "energy_price_ct_per_kwh",
+        "base_fee_eur_per_month",
+        "created_at",
+    )
+    readonly_fields = (
+        "valid_from",
+        "energy_price_ct_per_kwh",
+        "base_fee_eur_per_month",
+        "created_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

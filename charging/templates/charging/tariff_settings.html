@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Tariff settings</title>
+  <style>
+    body { font-family: sans-serif; max-width: 900px; margin: 2em auto; padding: 0 1em; }
+    h1 { margin-bottom: 0.2em; }
+    h2 { margin-top: 2em; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1em; }
+    th, td { border: 1px solid #ccc; padding: 0.4em 0.7em; text-align: left; }
+    th { background: #f2f2f2; }
+    tr.active { background: #fff7c2; }
+    .messages { margin: 1em 0; padding: 0; list-style: none; }
+    .messages li { padding: 0.5em 0.8em; border: 1px solid #b6e0a3; background: #e8f5e0; margin-bottom: 0.3em; }
+    .messages li.error { border-color: #e0a3a3; background: #f5e0e0; }
+    form p { margin: 0.5em 0; }
+    .errorlist { color: #a40000; margin: 0.2em 0; padding-left: 1.2em; }
+  </style>
+</head>
+<body>
+  <h1>Tariff settings</h1>
+
+  {% if messages %}
+    <ul class="messages">
+      {% for message in messages %}
+        <li class="{{ message.tags }}">{{ message }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  <h2>Add new tariff</h2>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <p><button type="submit">Save tariff</button></p>
+  </form>
+
+  <h2>Tariff history</h2>
+  {% if tariffs %}
+    <table>
+      <thead>
+        <tr>
+          <th>Valid from</th>
+          <th>Energy price (ct/kWh)</th>
+          <th>Base fee (€/month)</th>
+          <th>Active</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in tariffs %}
+          <tr class="{% if active_tariff and t.pk == active_tariff.pk %}active{% endif %}">
+            <td>{{ t.valid_from|date:"Y-m-d" }}</td>
+            <td>{{ t.energy_price_ct_per_kwh }}</td>
+            <td>{{ t.base_fee_eur_per_month }}</td>
+            <td>{% if active_tariff and t.pk == active_tariff.pk %}yes{% else %}&nbsp;{% endif %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>No tariffs recorded yet.</p>
+  {% endif %}
+</body>
+</html>
