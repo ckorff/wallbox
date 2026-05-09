@@ -136,7 +136,7 @@ class TariffSettingsViewTests(TestCase):
         response = self.client.post(
             self.url,
             data={
-                "valid_from": "2026-05-01",
+                "valid_from": "01.05.2026",
                 "energy_price_ct_per_kwh": "38.500",
                 "base_fee_eur_per_month": "16.40",
             },
@@ -169,7 +169,7 @@ class TariffSettingsViewTests(TestCase):
         response = self.client.post(
             self.url,
             data={
-                "valid_from": "2026-05-01",
+                "valid_from": "01.05.2026",
                 "energy_price_ct_per_kwh": "40.000",
                 "base_fee_eur_per_month": "17.00",
             },
@@ -185,7 +185,7 @@ class TariffSettingsViewTests(TestCase):
         response = self.client.post(
             self.url,
             data={
-                "valid_from": "2026-05-01",
+                "valid_from": "01.05.2026",
                 "energy_price_ct_per_kwh": "-1.000",
                 "base_fee_eur_per_month": "16.40",
             },
@@ -201,7 +201,7 @@ class TariffSettingsViewTests(TestCase):
         response = self.client.post(
             self.url,
             data={
-                "valid_from": "2026-05-01",
+                "valid_from": "01.05.2026",
                 "energy_price_ct_per_kwh": "38.500",
                 "base_fee_eur_per_month": "-0.01",
             },
