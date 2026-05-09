@@ -1,0 +1,207 @@
+"""Tests for PDF rendering of MonthlyReport rows (Phase 2.4)."""
+from datetime import date, datetime
+from decimal import Decimal
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+from django.test import TestCase, override_settings
+from django.template.loader import render_to_string
+
+from charging.models import (
+    ChargingSession,
+    MonthlyHouseUsage,
+    MonthlyReport,
+    Tariff,
+)
+from charging.services.pdf import (
+    attach_pdf_to_report,
+    build_report_context,
+    render_report_pdf,
+)
+from charging.services.reports import generate_monthly_report
+
+
+BERLIN = ZoneInfo("Europe/Berlin")
+
+
+def _session(started_local, energy_kwh, ended_local=None, serial="KEBA-1"):
+    return ChargingSession.objects.create(
+        serial=serial,
+        started_at=started_local,
+        ended_at=ended_local,
+        energy_kwh=Decimal(energy_kwh),
+        raw_row={},
+    )
+
+
+def _dt(year, month, day, hour=12, minute=0):
+    return datetime(year, month, day, hour, minute, tzinfo=BERLIN)
+
+
+def _seed_basic_report(year=2026, month=5):
+    """Tariff + a couple of sessions + house usage + a generated report."""
+    Tariff.objects.create(
+        valid_from=date(2026, 1, 1),
+        energy_price_ct_per_kwh=Decimal("38.500"),
+        base_fee_eur_per_month=Decimal("16.40"),
+    )
+    _session(_dt(year, month, 5, 9, 30), Decimal("4.000"))
+    _session(_dt(year, month, 17, 19, 15), Decimal("6.500"))
+    MonthlyHouseUsage.objects.create(
+        year=year, month=month, kwh_total=Decimal("400.000")
+    )
+    return generate_monthly_report(year, month)
+
+
+class RenderReportPdfTests(TestCase):
+    def test_returns_bytes_starting_with_pdf_magic(self):
+        report = _seed_basic_report()
+
+        pdf = render_report_pdf(report)
+
+        self.assertIsInstance(pdf, (bytes, bytearray))
+        self.assertEqual(pdf[:5], b"%PDF-")
+        self.assertGreater(len(pdf), 1000)
+
+
+class ReportHtmlContentTests(TestCase):
+    """Test the HTML template (faster, no WeasyPrint round-trip)."""
+
+    def _render_html(self, report):
+        context = build_report_context(report)
+        return render_to_string("charging/report_pdf.html", context)
+
+    def test_html_contains_month_and_year_header(self):
+        report = _seed_basic_report(2026, 5)
+        html = self._render_html(report)
+
+        self.assertIn("May 2026", html)
+
+    def test_html_contains_vehicle_string(self):
+        report = _seed_basic_report()
+        html = self._render_html(report)
+
+        self.assertIn("Audi Q6 e-tron", html)
+
+    def test_html_contains_grand_total_with_euro_and_two_decimals(self):
+        report = _seed_basic_report()
+        html = self._render_html(report)
+
+        # Total = energy cost (10.5 × 0.385 = 4.0425 -> 4.04)
+        # + prorated base fee (10.5 / 400 × 16.40 = 0.4305 -> 0.43)
+        # = 4.47
+        self.assertEqual(report.total_amount_eur, Decimal("4.47"))
+        self.assertIn("€", html)
+        self.assertIn("4.47", html)
+
+    def test_html_contains_a_row_per_session(self):
+        report = _seed_basic_report()
+        html = self._render_html(report)
+
+        sessions = list(
+            ChargingSession.objects.filter(
+                started_at__gte=datetime(2026, 5, 1, tzinfo=BERLIN),
+                started_at__lt=datetime(2026, 6, 1, tzinfo=BERLIN),
+            )
+        )
+        self.assertEqual(len(sessions), 2)
+        # Per-session kWh strings present
+        self.assertIn("4.000", html)
+        self.assertIn("6.500", html)
+        # Per-session dates present (DE numeric)
+        self.assertIn("05.05.2026", html)
+        self.assertIn("17.05.2026", html)
+
+    def test_html_warning_block_when_house_usage_missing(self):
+        Tariff.objects.create(
+            valid_from=date(2026, 1, 1),
+            energy_price_ct_per_kwh=Decimal("38.500"),
+            base_fee_eur_per_month=Decimal("16.40"),
+        )
+        _session(_dt(2026, 5, 10), Decimal("3.000"))
+        report = generate_monthly_report(2026, 5)
+        self.assertTrue(report.warning_house_usage_missing)
+
+        html = self._render_html(report)
+
+        lower = html.lower()
+        self.assertIn("household consumption", lower)
+        self.assertIn("may", lower)
+        self.assertIn("2026", html)
+
+    def test_html_no_warning_block_when_house_usage_present(self):
+        report = _seed_basic_report()
+        self.assertFalse(report.warning_house_usage_missing)
+
+        html = self._render_html(report)
+
+        # The warning text should not appear.
+        self.assertNotIn(
+            "not yet recorded",
+            html.lower(),
+        )
+
+
+@override_settings(MEDIA_ROOT=str(Path("/tmp/wallbox-test-media")))
+class AttachPdfToReportTests(TestCase):
+    def setUp(self):
+        media = Path("/tmp/wallbox-test-media")
+        if media.exists():
+            for f in media.rglob("*"):
+                if f.is_file():
+                    f.unlink()
+
+    def test_saves_pdf_to_report(self):
+        report = _seed_basic_report()
+
+        attach_pdf_to_report(report)
+
+        report.refresh_from_db()
+        self.assertTrue(report.pdf)
+        self.assertTrue(report.pdf.name.endswith(".pdf"))
+        self.assertGreater(report.pdf.size, 0)
+        self.assertTrue(Path(report.pdf.path).exists())
+
+    def test_filename_pattern(self):
+        report = _seed_basic_report(2026, 5)
+
+        attach_pdf_to_report(report)
+
+        report.refresh_from_db()
+        self.assertTrue(report.pdf.name.endswith("report-2026-05.pdf"))
+
+    def test_regeneration_replaces_file_on_disk(self):
+        report = _seed_basic_report()
+
+        attach_pdf_to_report(report)
+        report.refresh_from_db()
+        first_path = Path(report.pdf.path)
+        first_bytes = first_path.read_bytes()
+        self.assertGreater(len(first_bytes), 0)
+
+        # Mutate the report so the rendered content changes.
+        _session(_dt(2026, 5, 25, 8, 0), Decimal("2.500"))
+        report = generate_monthly_report(2026, 5)
+
+        attach_pdf_to_report(report)
+        report.refresh_from_db()
+        second_path = Path(report.pdf.path)
+        second_bytes = second_path.read_bytes()
+
+        self.assertTrue(second_path.exists())
+        self.assertNotEqual(first_bytes, second_bytes)
+
+        # No leftover orphan file: only one PDF should remain in the dir
+        # for this (year, month).
+        media_reports = Path(report.pdf.storage.location) / "reports"
+        if media_reports.exists():
+            files = sorted(media_reports.glob("report-2026-05*.pdf"))
+            self.assertEqual(len(files), 1, files)
+
+    def test_returns_saved_report(self):
+        report = _seed_basic_report()
+
+        result = attach_pdf_to_report(report)
+
+        self.assertEqual(result.pk, report.pk)
+        self.assertTrue(bool(result.pdf))

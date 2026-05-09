@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Charging Cost Report — {{ month_label }}</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 18mm;
+      @bottom-right {
+        content: counter(page) "/" counter(pages);
+        font-family: sans-serif;
+        font-size: 9pt;
+        color: #666;
+      }
+      @bottom-left {
+        content: "Generated automatically from the KEBA P30 wallbox session log.";
+        font-family: sans-serif;
+        font-size: 8pt;
+        color: #666;
+      }
+    }
+    body {
+      font-family: "Helvetica", "Arial", sans-serif;
+      font-size: 10pt;
+      color: #222;
+    }
+    h1 {
+      font-size: 18pt;
+      margin: 0 0 0.4em 0;
+    }
+    .meta {
+      margin-bottom: 1.2em;
+    }
+    .meta dl {
+      display: grid;
+      grid-template-columns: max-content 1fr;
+      column-gap: 1em;
+      row-gap: 0.15em;
+      margin: 0;
+    }
+    .meta dt {
+      font-weight: bold;
+      color: #555;
+    }
+    .meta dd {
+      margin: 0;
+    }
+    .warning {
+      border: 1.5pt solid #b8860b;
+      background: #fff7e0;
+      padding: 0.6em 0.8em;
+      margin: 0 0 1em 0;
+      font-weight: bold;
+    }
+    table.sessions {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.4em;
+      font-size: 9.5pt;
+    }
+    table.sessions th, table.sessions td {
+      border: 0.5pt solid #999;
+      padding: 0.25em 0.5em;
+      text-align: left;
+    }
+    table.sessions th {
+      background: #eee;
+    }
+    table.sessions td.num, table.sessions th.num {
+      text-align: right;
+    }
+    table.sessions tfoot td {
+      font-weight: bold;
+      background: #f5f5f5;
+    }
+    .summary {
+      margin-top: 1.4em;
+    }
+    .summary table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .summary td {
+      padding: 0.2em 0;
+      vertical-align: top;
+    }
+    .summary td.label {
+      width: 60%;
+      color: #444;
+    }
+    .summary td.value {
+      text-align: right;
+    }
+    .formula {
+      font-family: "Courier New", monospace;
+      font-size: 9.5pt;
+      color: #444;
+    }
+    .grand-total {
+      margin-top: 1em;
+      padding-top: 0.6em;
+      border-top: 1pt solid #333;
+      font-size: 13pt;
+      font-weight: bold;
+      display: flex;
+      justify-content: space-between;
+    }
+    h2 {
+      font-size: 11pt;
+      margin: 1.2em 0 0.3em 0;
+      border-bottom: 0.5pt solid #999;
+      padding-bottom: 0.15em;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Charging Cost Report</h1>
+
+  <div class="meta">
+    <dl>
+      <dt>Period</dt>
+      <dd>{{ month_label }} ({{ period_start|date:"d.m.Y" }} – {{ period_end|date:"d.m.Y" }})</dd>
+      <dt>Vehicle</dt>
+      <dd>{{ vehicle }}</dd>
+      <dt>Generated</dt>
+      <dd>{{ generation_date|date:"d.m.Y" }}</dd>
+    </dl>
+  </div>
+
+  {% if report.warning_house_usage_missing %}
+    <div class="warning">
+      Household consumption for {{ month_label }} not yet recorded;
+      base fee not included in this report.
+    </div>
+  {% endif %}
+
+  <h2>Charging sessions</h2>
+  {% if session_rows %}
+    <table class="sessions">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Start</th>
+          <th>End</th>
+          <th class="num">kWh</th>
+          <th class="num">Tariff (ct/kWh)</th>
+          <th class="num">Line cost (€)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in session_rows %}
+          <tr>
+            <td>{{ row.date|date:"d.m.Y" }}</td>
+            <td>{{ row.start_time|time:"H:i" }}</td>
+            <td>{% if row.end_time %}{{ row.end_time|time:"H:i" }}{% else %}—{% endif %}</td>
+            <td class="num">{{ row.energy_kwh }}</td>
+            <td class="num">{{ row.tariff_ct_per_kwh }}</td>
+            <td class="num">{{ row.line_cost_eur }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="3">Total</td>
+          <td class="num">{{ session_kwh_total }}</td>
+          <td class="num"></td>
+          <td class="num">{{ session_cost_total }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  {% else %}
+    <p><em>No charging sessions recorded for this month.</em></p>
+  {% endif %}
+
+  <h2>Summary</h2>
+  <div class="summary">
+    <table>
+      <tr>
+        <td class="label">Total energy charged at home</td>
+        <td class="value">{{ report.wallbox_kwh_total }} kWh</td>
+      </tr>
+      <tr>
+        <td class="label">Total energy cost</td>
+        <td class="value">€ {{ report.energy_cost_eur }}</td>
+      </tr>
+      <tr>
+        <td class="label">Total household consumption</td>
+        <td class="value">
+          {% if report.house_kwh_total is not None %}
+            {{ report.house_kwh_total }} kWh
+          {% else %}
+            not recorded
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td class="label">Pro-rated base fee</td>
+        <td class="value">
+          {% if report.house_kwh_total is not None and month_start_tariff %}
+            <span class="formula">
+              ({{ report.wallbox_kwh_total }} / {{ report.house_kwh_total }})
+              × {{ month_start_tariff.base_fee_eur_per_month }}
+            </span>
+            = € {{ report.prorated_base_fee_eur }}
+          {% else %}
+            not applicable
+          {% endif %}
+        </td>
+      </tr>
+    </table>
+
+    <div class="grand-total">
+      <span>Grand total to be reimbursed</span>
+      <span>€ {{ report.total_amount_eur }}</span>
+    </div>
+  </div>
+
+</body>
+</html>
