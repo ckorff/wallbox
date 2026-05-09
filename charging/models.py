@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.utils import timezone
 
 
 class Tariff(models.Model):
@@ -113,3 +114,39 @@ class MonthlyHouseUsage(models.Model):
         kwh = self.effective_kwh
         kwh_str = f"{kwh:.3f}" if kwh is not None else "—"
         return f"{self.year}-{self.month:02d}: {kwh_str} kWh"
+
+
+class MonthlyReport(models.Model):
+    year = models.PositiveSmallIntegerField()
+    month = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(12)],
+    )
+    pdf = models.FileField(upload_to="reports/", blank=True)
+    generated_at = models.DateTimeField(default=timezone.now)
+    wallbox_kwh_total = models.DecimalField(max_digits=10, decimal_places=3)
+    energy_cost_eur = models.DecimalField(max_digits=8, decimal_places=2)
+    house_kwh_total = models.DecimalField(
+        max_digits=10, decimal_places=3, null=True, blank=True
+    )
+    prorated_base_fee_eur = models.DecimalField(max_digits=8, decimal_places=2)
+    total_amount_eur = models.DecimalField(max_digits=8, decimal_places=2)
+    tariff_used = models.ForeignKey(
+        Tariff,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="reports",
+    )
+    warning_house_usage_missing = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-year", "-month"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["year", "month"],
+                name="unique_monthly_report",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Report {self.year}-{self.month:02d} (€ {self.total_amount_eur})"

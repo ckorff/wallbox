@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from .models import ChargingSession
+from charging.models import ChargingSession
 
 
 _KWH_QUANT = Decimal("0.001")

@@ -1,0 +1,126 @@
+"""Monthly report calculation for the KEBA wallbox."""
+from __future__ import annotations
+
+from datetime import date, datetime
+from decimal import ROUND_HALF_UP, Decimal
+from zoneinfo import ZoneInfo
+
+from django.db import transaction
+from django.utils import timezone
+
+from charging.models import (
+    ChargingSession,
+    MonthlyHouseUsage,
+    MonthlyReport,
+    Tariff,
+)
+
+
+BERLIN = ZoneInfo("Europe/Berlin")
+_MONEY = Decimal("0.01")
+_KWH = Decimal("0.001")
+_HUNDRED = Decimal(100)
+
+
+class MissingTariffError(Exception):
+    """Raised when a session falls on a date with no applicable tariff."""
+
+
+def _quantize_money(value: Decimal) -> Decimal:
+    return value.quantize(_MONEY, rounding=ROUND_HALF_UP)
+
+
+def _quantize_kwh(value: Decimal) -> Decimal:
+    return value.quantize(_KWH, rounding=ROUND_HALF_UP)
+
+
+def _month_bounds(year: int, month: int) -> tuple[datetime, datetime, date]:
+    first = date(year, month, 1)
+    if month == 12:
+        next_first = date(year + 1, 1, 1)
+    else:
+        next_first = date(year, month + 1, 1)
+    start_dt = datetime(year, first.month, 1, tzinfo=BERLIN)
+    end_dt = datetime(next_first.year, next_first.month, 1, tzinfo=BERLIN)
+    return start_dt, end_dt, next_first
+
+
+def _resolve_tariff_used(year: int, month: int, next_first: date):
+    first_of_month = date(year, month, 1)
+    has_mid_month_change = Tariff.objects.filter(
+        valid_from__gt=first_of_month,
+        valid_from__lt=next_first,
+    ).exists()
+    if has_mid_month_change:
+        return None
+    return Tariff.for_date(first_of_month)
+
+
+@transaction.atomic
+def generate_monthly_report(year: int, month: int) -> MonthlyReport:
+    start_dt, end_dt, next_first = _month_bounds(year, month)
+    first_of_month = date(year, month, 1)
+
+    sessions = list(
+        ChargingSession.objects.filter(
+            started_at__gte=start_dt,
+            started_at__lt=end_dt,
+        )
+    )
+
+    wallbox_kwh_total = Decimal("0")
+    energy_cost_eur_raw = Decimal("0")
+    for session in sessions:
+        session_date = session.started_at.astimezone(BERLIN).date()
+        tariff = Tariff.for_date(session_date)
+        if tariff is None:
+            raise MissingTariffError(
+                f"No tariff valid on {session_date.isoformat()} "
+                f"for session {session.pk}"
+            )
+        wallbox_kwh_total += session.energy_kwh
+        energy_cost_eur_raw += (
+            session.energy_kwh * tariff.energy_price_ct_per_kwh / _HUNDRED
+        )
+
+    house_usage = MonthlyHouseUsage.objects.filter(year=year, month=month).first()
+    house_kwh_total = house_usage.effective_kwh if house_usage else None
+    warning_house_usage_missing = house_kwh_total is None
+
+    if warning_house_usage_missing:
+        prorated_base_fee_eur = Decimal("0.00")
+    else:
+        month_start_tariff = Tariff.for_date(first_of_month)
+        if month_start_tariff is None or wallbox_kwh_total == 0:
+            prorated_base_fee_eur = Decimal("0.00")
+        else:
+            base_fee_raw = (
+                (wallbox_kwh_total / house_kwh_total)
+                * month_start_tariff.base_fee_eur_per_month
+            )
+            prorated_base_fee_eur = _quantize_money(base_fee_raw)
+
+    energy_cost_eur = _quantize_money(energy_cost_eur_raw)
+    total_amount_eur = _quantize_money(energy_cost_eur + prorated_base_fee_eur)
+
+    tariff_used = _resolve_tariff_used(year, month, next_first)
+
+    defaults = {
+        "wallbox_kwh_total": _quantize_kwh(wallbox_kwh_total),
+        "energy_cost_eur": energy_cost_eur,
+        "house_kwh_total": (
+            _quantize_kwh(house_kwh_total) if house_kwh_total is not None else None
+        ),
+        "prorated_base_fee_eur": prorated_base_fee_eur,
+        "total_amount_eur": total_amount_eur,
+        "tariff_used": tariff_used,
+        "warning_house_usage_missing": warning_house_usage_missing,
+        "generated_at": timezone.now(),
+    }
+
+    report, _ = MonthlyReport.objects.update_or_create(
+        year=year,
+        month=month,
+        defaults=defaults,
+    )
+    return report

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import ChargingSession, MonthlyHouseUsage, Tariff
+from .models import ChargingSession, MonthlyHouseUsage, MonthlyReport, Tariff
 
 
 @admin.register(ChargingSession)
@@ -53,3 +53,27 @@ class MonthlyHouseUsageAdmin(admin.ModelAdmin):
     )
     list_filter = ("year",)
     ordering = ("-year", "-month")
+
+
+@admin.register(MonthlyReport)
+class MonthlyReportAdmin(admin.ModelAdmin):
+    list_display = (
+        "year",
+        "month",
+        "wallbox_kwh_total",
+        "energy_cost_eur",
+        "prorated_base_fee_eur",
+        "total_amount_eur",
+        "warning_house_usage_missing",
+    )
+    list_filter = ("year",)
+    ordering = ("-year", "-month")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
