@@ -175,15 +175,12 @@ blocks for a few seconds while the wallbox is queried. Async/queued
 imports are a Phase 3 concern.
 
 ## PDF layout (English, professional, A4 portrait)
-- Header block (single column, label + value rows):
-  - **Title:** "Charging Cost Report — <Month> <Year>"
-  - Reporter             (from env: `REPORTER_NAME`)
-  - Employee ID          (from env: `REPORTER_EMPLOYEE_ID`)
-  - Vehicle              (from env: `VEHICLE_MAKE_MODEL`)
-  - License plate        (from env: `VEHICLE_LICENSE_PLATE`)
-  - Charging location    (from env: `CHARGING_LOCATION`, may be multi-line)
-  - Reporting period     ("1 – 31 May 2026")
-  - Generated            ("9 May 2026")
+- Header block:
+  - Title (h1): "Charging Cost Report — <Month> <Year>"
+  - Subtitle: full reporting period ("1 – 31 May 2026"), muted, smaller
+  - First info row (split): Reporter on the left, Generated date on the right
+  - Remaining info rows (single column): Employee ID, Vehicle,
+    License plate, Charging location
 - Date format: explicit English long form everywhere ("7 May 2026"). Never
   rely on system locale; always use Django's `|date:"j F Y"` filter.
 - Sessions table: Date, Start, End, kWh, Tariff (ct/kWh), Line cost (€).

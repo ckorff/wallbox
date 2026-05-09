@@ -44,9 +44,15 @@
     h1 {
       font-size: var(--fs-h1);
       font-weight: 600;
-      margin: 0 0 1.5em 0;
+      margin: 0 0 0.3em 0;
       padding-bottom: 0.3em;
       border-bottom: 2pt solid var(--color-accent);
+    }
+
+    .subtitle {
+      margin: 0 0 1.5em 0;
+      font-size: 11pt;
+      color: var(--color-muted);
     }
 
     h2 {
@@ -78,6 +84,21 @@
       flex: 1 1 auto;
       margin: 0;
       font-weight: 500;
+    }
+    .reporter-info .row.split {
+      justify-content: space-between;
+    }
+    .reporter-info .pair {
+      display: flex;
+      align-items: baseline;
+    }
+    .reporter-info .pair dd {
+      flex: 0 0 auto;
+    }
+    .reporter-info .pair.right dt {
+      flex: 0 0 auto;
+      text-align: left;
+      padding-right: 0.5em;
     }
 
     table.sessions {
@@ -147,15 +168,17 @@
 <body>
 
   <h1>Charging Cost Report — {{ period_start|date:"F Y" }}</h1>
+  <p class="subtitle">{{ period_start.day }} – {{ period_end|date:"j F Y" }}</p>
 
   <dl class="reporter-info">
-    <div class="row"><dt>Reporter</dt><dd>{{ reporter_name }}</dd></div>
+    <div class="row split">
+      <div class="pair"><dt>Reporter</dt><dd>{{ reporter_name }}</dd></div>
+      <div class="pair right"><dt>Generated</dt><dd>{{ generation_date|date:"j F Y" }}</dd></div>
+    </div>
     <div class="row"><dt>Employee ID</dt><dd>{{ reporter_employee_id }}</dd></div>
     <div class="row"><dt>Vehicle</dt><dd>{{ vehicle_make_model }}</dd></div>
     <div class="row"><dt>License plate</dt><dd>{{ vehicle_license_plate }}</dd></div>
     <div class="row"><dt>Charging location</dt><dd>{{ charging_location|linebreaksbr }}</dd></div>
-    <div class="row"><dt>Reporting period</dt><dd>{{ period_start.day }} – {{ period_end|date:"j F Y" }}</dd></div>
-    <div class="row"><dt>Generated</dt><dd>{{ generation_date|date:"j F Y" }}</dd></div>
   </dl>
 
   <h2>Charging sessions</h2>
