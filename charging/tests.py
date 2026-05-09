@@ -1,102 +1,170 @@
-from datetime import datetime, timezone
+import json
+from datetime import datetime
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from django.test import TestCase
 
-from charging.keba import KebaClient, KebaError
+from charging.keba_http import (
+    KebaAuthError,
+    _extract_csrf_token,
+    fetch_sessions_csv,
+    parse_sessions_csv,
+)
 from charging.models import ChargingSession
-from charging.services import ingest_session_report
+from charging.services import ingest_csv_row
 
 
-SAMPLE_REPORT = {
-    "ID": "100",
-    "Session ID": 42,
-    "Curr HW": 32000,
-    "E start": 12_345_678,
-    "E pres": 567_890,
-    "started": "2024-01-15 18:30:45.000",
-    "ended": "2024-01-15 22:45:30.000",
-    "started[s]": 1_705_339_845,  # 2024-01-15 17:30:45 UTC
-    "ended[s]": 1_705_355_130,    # 2024-01-15 21:45:30 UTC
-    "reason": 1,
-    "Serial": "12345678",
-}
+SAMPLE_CSV = (
+    "Charging Station ID;Serial;RFID Card;Status;Start;End;Duration (s);"
+    "Meter at start (Wh);Meter at end (Wh);Consumption (kWh)\r\n"
+    "1;34416115;predefinedTokenId;CLOSED;07-05-2026 15:33:35;"
+    "07-05-2026 19:18:53;13518;154.9;27797.0;27.64\r\n"
+    "1;34416115;044115CA911E94;CLOSED;07-05-2026 15:31:39;"
+    "07-05-2026 15:32:14;34;154.9;154.9;0\r\n"
+)
+BERLIN = ZoneInfo("Europe/Berlin")
 
 
-class KebaClientTests(TestCase):
-    @patch("charging.keba.socket.socket")
-    def test_request_sends_command_and_parses_json(self, mock_socket_cls):
-        mock_sock = MagicMock()
-        mock_sock.recvfrom.return_value = (
-            b'{"ID": "100", "Session ID": 1}',
-            ("192.0.2.10", 7090),
+LOGIN_HTML = (
+    '<html><head>'
+    '<meta name="csrf-token" content="abc123def456">'
+    '</head><body>Login</body></html>'
+)
+
+
+class ExtractCsrfTokenTests(TestCase):
+    def test_extracts_token_from_meta(self):
+        self.assertEqual(_extract_csrf_token(LOGIN_HTML), "abc123def456")
+
+    def test_raises_when_token_missing(self):
+        with self.assertRaises(KebaAuthError):
+            _extract_csrf_token("<html><body>no token here</body></html>")
+
+
+class FetchSessionsCsvTests(TestCase):
+    @patch("charging.keba_http._open")
+    def test_full_login_flow_fetches_csv(self, mock_open):
+        mock_open.side_effect = [LOGIN_HTML, '{"status":"ok"}', SAMPLE_CSV]
+
+        body = fetch_sessions_csv("192.0.2.10", "user", "pw")
+
+        self.assertEqual(body, SAMPLE_CSV)
+        calls = mock_open.call_args_list
+        self.assertEqual(len(calls), 3)
+        # 1) GET /
+        self.assertEqual(calls[0].args[1], "http://192.0.2.10/")
+        # 2) POST /ajax.php with JSON containing the CSRF token from step 1
+        self.assertEqual(calls[1].args[1], "http://192.0.2.10/ajax.php")
+        login_payload = json.loads(calls[1].kwargs["data"].decode("utf-8"))
+        self.assertEqual(
+            login_payload,
+            {"username": "user", "password": "pw", "csrftoken": "abc123def456"},
         )
-        mock_socket_cls.return_value.__enter__.return_value = mock_sock
-
-        client = KebaClient("192.0.2.10")
-        result = client.request("report 100")
-
-        mock_sock.settimeout.assert_called_once_with(2.0)
-        mock_sock.sendto.assert_called_once_with(
-            b"report 100", ("192.0.2.10", 7090)
+        # 3) GET /export.php with cache buster
+        export_url = calls[2].args[1]
+        self.assertTrue(
+            export_url.startswith("http://192.0.2.10/export.php?chargingsessions=&t=")
         )
-        self.assertEqual(result, {"ID": "100", "Session ID": 1})
+        cache_buster = export_url.rsplit("=", 1)[1]
+        self.assertTrue(cache_buster.isdigit() and int(cache_buster) > 0)
 
-    @patch("charging.keba.socket.socket")
-    def test_request_raises_keba_error_on_invalid_json(self, mock_socket_cls):
-        mock_sock = MagicMock()
-        mock_sock.recvfrom.return_value = (b"not json", ("192.0.2.10", 7090))
-        mock_socket_cls.return_value.__enter__.return_value = mock_sock
+    @patch("charging.keba_http._open")
+    def test_passes_timeout_to_every_request(self, mock_open):
+        mock_open.side_effect = [LOGIN_HTML, "{}", SAMPLE_CSV]
 
-        client = KebaClient("192.0.2.10")
-        with self.assertRaises(KebaError):
-            client.request("report 100")
+        fetch_sessions_csv("192.0.2.10", "u", "p", timeout=7.5)
+
+        for call in mock_open.call_args_list:
+            self.assertEqual(call.kwargs["timeout"], 7.5)
+
+    @patch("charging.keba_http._open")
+    def test_raises_when_export_returns_html(self, mock_open):
+        mock_open.side_effect = [
+            LOGIN_HTML,
+            "{}",
+            "<!DOCTYPE html><html>Login</html>",
+        ]
+
+        with self.assertRaises(KebaAuthError):
+            fetch_sessions_csv("192.0.2.10", "wrong", "creds")
 
 
-class IngestSessionReportTests(TestCase):
+class ParseSessionsCsvTests(TestCase):
+    def test_parses_two_rows_with_expected_columns(self):
+        rows = parse_sessions_csv(SAMPLE_CSV)
+
+        self.assertEqual(len(rows), 2)
+        first = rows[0]
+        self.assertEqual(first["Serial"], "34416115")
+        self.assertEqual(first["Start"], "07-05-2026 15:33:35")
+        self.assertEqual(first["End"], "07-05-2026 19:18:53")
+        self.assertEqual(first["Consumption (kWh)"], "27.64")
+        self.assertEqual(first["Status"], "CLOSED")
+
+    def test_returns_empty_for_empty_input(self):
+        self.assertEqual(parse_sessions_csv(""), [])
+
+    def test_returns_empty_when_only_header_present(self):
+        header_only = SAMPLE_CSV.split("\r\n", 1)[0] + "\r\n"
+
+        self.assertEqual(parse_sessions_csv(header_only), [])
+
+
+class IngestCsvRowTests(TestCase):
+    def _row(self, **overrides):
+        base = {
+            "Charging Station ID": "1",
+            "Serial": "34416115",
+            "RFID Card": "044115CA911E94",
+            "Status": "CLOSED",
+            "Start": "07-05-2026 15:33:35",
+            "End": "07-05-2026 19:18:53",
+            "Duration (s)": "13518",
+            "Meter at start (Wh)": "154.9",
+            "Meter at end (Wh)": "27797.0",
+            "Consumption (kWh)": "27.64",
+        }
+        base.update(overrides)
+        return base
+
     def test_creates_new_session(self):
-        obj, created = ingest_session_report(SAMPLE_REPORT)
+        row = self._row()
+
+        obj, created = ingest_csv_row(row)
 
         self.assertTrue(created)
-        self.assertEqual(obj.keba_session_id, 42)
-        self.assertEqual(obj.energy_kwh, Decimal("56.789"))
+        self.assertEqual(obj.serial, "34416115")
+        self.assertEqual(obj.energy_kwh, Decimal("27.640"))
         self.assertEqual(
             obj.started_at,
-            datetime(2024, 1, 15, 17, 30, 45, tzinfo=timezone.utc),
+            datetime(2026, 5, 7, 15, 33, 35, tzinfo=BERLIN),
         )
         self.assertEqual(
             obj.ended_at,
-            datetime(2024, 1, 15, 21, 45, 30, tzinfo=timezone.utc),
+            datetime(2026, 5, 7, 19, 18, 53, tzinfo=BERLIN),
         )
-        self.assertEqual(obj.end_reason, "1")
-        self.assertEqual(obj.raw_report, SAMPLE_REPORT)
+        self.assertEqual(obj.raw_row, row)
 
-    def test_updates_existing_session_idempotently(self):
-        ingest_session_report(SAMPLE_REPORT)
-        updated_payload = dict(SAMPLE_REPORT, **{"E pres": 600_000, "reason": 10})
+    def test_re_import_updates_existing_row(self):
+        ingest_csv_row(self._row())
 
-        obj, created = ingest_session_report(updated_payload)
+        obj, created = ingest_csv_row(self._row(**{"Consumption (kWh)": "27.65"}))
 
         self.assertFalse(created)
-        self.assertEqual(obj.energy_kwh, Decimal("60.000"))
-        self.assertEqual(obj.end_reason, "10")
+        self.assertEqual(obj.energy_kwh, Decimal("27.650"))
         self.assertEqual(ChargingSession.objects.count(), 1)
 
-    def test_skips_empty_slot(self):
-        empty = {"ID": "115", "Session ID": 0}
-
-        obj, created = ingest_session_report(empty)
+    def test_skips_zero_kwh_touch_session(self):
+        obj, created = ingest_csv_row(self._row(**{"Consumption (kWh)": "0"}))
 
         self.assertIsNone(obj)
         self.assertFalse(created)
         self.assertEqual(ChargingSession.objects.count(), 0)
 
-    def test_running_session_has_no_ended_at_or_reason(self):
-        running = dict(SAMPLE_REPORT, **{"ended[s]": 0, "reason": 0})
+    def test_skips_zero_kwh_with_decimal_zero(self):
+        obj, created = ingest_csv_row(self._row(**{"Consumption (kWh)": "0.000"}))
 
-        obj, created = ingest_session_report(running)
-
-        self.assertTrue(created)
-        self.assertIsNone(obj.ended_at)
-        self.assertEqual(obj.end_reason, "")
+        self.assertIsNone(obj)
+        self.assertFalse(created)

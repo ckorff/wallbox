@@ -1,48 +1,41 @@
-"""Persistence helpers for KEBA wallbox session reports."""
+"""Persistence helpers for KEBA wallbox CSV rows."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from decimal import Decimal
-from typing import Optional
+from zoneinfo import ZoneInfo
 
 from .models import ChargingSession
 
 
-# KEBA reports energy in 0.1 Wh ticks: divide by 10_000 to get kWh.
-_TICKS_PER_KWH = Decimal(10_000)
 _KWH_QUANT = Decimal("0.001")
+_BERLIN = ZoneInfo("Europe/Berlin")
+_DATE_FMT = "%d-%m-%Y %H:%M:%S"
 
 
-def _seconds_to_datetime(seconds) -> Optional[datetime]:
-    if not seconds:
+def _parse_local(value: str) -> datetime | None:
+    value = (value or "").strip()
+    if not value:
         return None
-    return datetime.fromtimestamp(int(seconds), tz=timezone.utc)
+    return datetime.strptime(value, _DATE_FMT).replace(tzinfo=_BERLIN)
 
 
-def ingest_session_report(report: dict):
-    """Upsert a ChargingSession from a KEBA `report 1xx` payload.
+def ingest_csv_row(row: dict):
+    """Upsert a ChargingSession from one parsed CSV row.
 
-    Returns ``(instance, created)`` for valid rows, or ``(None, False)``
-    when the report represents an empty slot or has no usable start.
+    Returns ``(instance, created)`` for billable rows, or ``(None, False)``
+    for 0 kWh "touch" sessions (RFID swipe without charging).
     """
-    session_id = report.get("Session ID") or 0
-    started_at = _seconds_to_datetime(report.get("started[s]"))
-    if not session_id or started_at is None:
+    energy_kwh = Decimal(row["Consumption (kWh)"]).quantize(_KWH_QUANT)
+    if energy_kwh == 0:
         return None, False
 
-    energy_ticks = int(report.get("E pres") or 0)
-    energy_kwh = (Decimal(energy_ticks) / _TICKS_PER_KWH).quantize(_KWH_QUANT)
-
-    reason = report.get("reason")
-    end_reason = "" if not reason else str(reason)
-
     return ChargingSession.objects.update_or_create(
-        keba_session_id=session_id,
+        serial=row["Serial"],
+        started_at=_parse_local(row["Start"]),
         defaults={
-            "started_at": started_at,
-            "ended_at": _seconds_to_datetime(report.get("ended[s]")),
+            "ended_at": _parse_local(row["End"]),
             "energy_kwh": energy_kwh,
-            "end_reason": end_reason,
-            "raw_report": report,
+            "raw_row": row,
         },
     )

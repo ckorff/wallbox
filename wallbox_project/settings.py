@@ -128,7 +128,7 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
-# KEBA P30 wallbox — UDP report protocol (port 7090 by default).
-# Note: do NOT reuse KEBA_PORT from .env; that one is the Modbus TCP port (502).
+# KEBA P30 wallbox — HTTP CSV export via the web GUI (replays browser login).
 KEBA_HOST = env("KEBA_HOST", default="")
-KEBA_UDP_PORT = env.int("KEBA_UDP_PORT", default=7090)
+KEBA_USERNAME = env("KEBA_USERNAME", default="")
+KEBA_PASSWORD = env("KEBA_PASSWORD", default="")
