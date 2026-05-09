@@ -135,3 +135,13 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 KEBA_HOST = env("KEBA_HOST", default="")
 KEBA_USERNAME = env("KEBA_USERNAME", default="")
 KEBA_PASSWORD = env("KEBA_PASSWORD", default="")
+
+# Reporter and vehicle profile — printed on every monthly PDF report.
+# Required: missing values raise ImproperlyConfigured at startup so we never
+# silently render a blank field in the PDF.
+REPORTER_NAME = env("REPORTER_NAME")
+REPORTER_EMPLOYEE_ID = env("REPORTER_EMPLOYEE_ID")
+VEHICLE_MAKE_MODEL = env("VEHICLE_MAKE_MODEL")
+VEHICLE_LICENSE_PLATE = env("VEHICLE_LICENSE_PLATE")
+# Literal "\n" sequences in the .env value become real newlines.
+CHARGING_LOCATION = env("CHARGING_LOCATION").replace("\\n", "\n")

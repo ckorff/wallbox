@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Charging Cost Report — {{ month_label }}</title>
+  <title>Charging Cost Report — {{ period_start|date:"F Y" }}</title>
   <style>
     @page {
       size: A4 portrait;
@@ -104,16 +104,24 @@
 </head>
 <body>
 
-  <h1>Charging Cost Report</h1>
+  <h1>Charging Cost Report — {{ period_start|date:"F Y" }}</h1>
 
   <div class="meta">
     <dl>
-      <dt>Period</dt>
-      <dd>{{ month_label }} ({{ period_start|date:"d.m.Y" }} – {{ period_end|date:"d.m.Y" }})</dd>
+      <dt>Reporter</dt>
+      <dd>{{ reporter_name }}</dd>
+      <dt>Employee ID</dt>
+      <dd>{{ reporter_employee_id }}</dd>
       <dt>Vehicle</dt>
-      <dd>{{ vehicle }}</dd>
+      <dd>{{ vehicle_make_model }}</dd>
+      <dt>License plate</dt>
+      <dd>{{ vehicle_license_plate }}</dd>
+      <dt>Charging location</dt>
+      <dd>{{ charging_location|linebreaksbr }}</dd>
+      <dt>Reporting period</dt>
+      <dd>{{ period_start.day }} – {{ period_end|date:"j F Y" }}</dd>
       <dt>Generated</dt>
-      <dd>{{ generation_date|date:"d.m.Y" }}</dd>
+      <dd>{{ generation_date|date:"j F Y" }}</dd>
     </dl>
   </div>
 
@@ -133,7 +141,7 @@
       <tbody>
         {% for row in session_rows %}
           <tr>
-            <td>{{ row.date|date:"d.m.Y" }}</td>
+            <td>{{ row.date|date:"j F Y" }}</td>
             <td>{{ row.start_time|time:"H:i" }}</td>
             <td>{% if row.end_time %}{{ row.end_time|time:"H:i" }}{% else %}—{% endif %}</td>
             <td class="num">{{ row.energy_kwh }}</td>

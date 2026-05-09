@@ -18,6 +18,16 @@ from charging.services.reports import generate_monthly_report
 
 BERLIN = ZoneInfo("Europe/Berlin")
 
+# Deterministic reporter/vehicle profile for test assertions.
+# Decoupled from .env so tests don't depend on the developer's real values.
+REPORTER_OVERRIDES = {
+    "REPORTER_NAME": "Test Reporter",
+    "REPORTER_EMPLOYEE_ID": "EMP-42",
+    "VEHICLE_MAKE_MODEL": "Test Make Model",
+    "VEHICLE_LICENSE_PLATE": "TS T 1234",
+    "CHARGING_LOCATION": "Teststraße 1\n12345 Testtown, Country",
+}
+
 
 def _session(started_local, energy_kwh, ended_local=None, serial="KEBA-1"):
     return ChargingSession.objects.create(
@@ -44,6 +54,7 @@ def _seed_basic_report(year=2026, month=5):
     return generate_monthly_report(year, month)
 
 
+@override_settings(**REPORTER_OVERRIDES)
 class RenderReportPdfTests(TestCase):
     def test_returns_bytes_starting_with_pdf_magic(self):
         report = _seed_basic_report()
@@ -55,6 +66,7 @@ class RenderReportPdfTests(TestCase):
         self.assertGreater(len(pdf), 1000)
 
 
+@override_settings(**REPORTER_OVERRIDES)
 class ReportHtmlContentTests(TestCase):
     """Test the HTML template (faster, no WeasyPrint round-trip)."""
 
@@ -68,11 +80,33 @@ class ReportHtmlContentTests(TestCase):
 
         self.assertIn("May 2026", html)
 
-    def test_html_contains_vehicle_string(self):
+    def test_html_contains_reporter_profile_from_settings(self):
         report = _seed_basic_report()
         html = self._render_html(report)
 
-        self.assertIn("Audi Q6 e-tron", html)
+        self.assertIn("Test Reporter", html)
+        self.assertIn("EMP-42", html)
+        self.assertIn("Test Make Model", html)
+        self.assertIn("TS T 1234", html)
+        # First line of the multi-line address.
+        self.assertIn("Teststraße 1", html)
+        self.assertIn("12345 Testtown, Country", html)
+
+    def test_html_renders_charging_location_newlines_as_br(self):
+        report = _seed_basic_report()
+        html = self._render_html(report)
+
+        # |linebreaksbr converts \n into <br>.
+        self.assertRegex(html, r"Teststraße 1\s*<br\s*/?>\s*12345 Testtown")
+
+    def test_html_uses_only_english_long_form_dates(self):
+        report = _seed_basic_report()
+        html = self._render_html(report)
+
+        # No German numeric date pattern (DD.MM.YYYY) anywhere.
+        self.assertNotRegex(html, r"\b\d{2}\.\d{2}\.\d{4}\b")
+        # And the English form is actually present.
+        self.assertIn("May 2026", html)
 
     def test_html_contains_grand_total_with_euro_and_two_decimals(self):
         report = _seed_basic_report()
@@ -97,12 +131,12 @@ class ReportHtmlContentTests(TestCase):
         # Per-session kWh strings present
         self.assertIn("4.000", html)
         self.assertIn("6.500", html)
-        # Per-session dates present (DE numeric)
-        self.assertIn("05.05.2026", html)
-        self.assertIn("17.05.2026", html)
+        # Per-session dates present in English long form, no leading zero on day.
+        self.assertIn("5 May 2026", html)
+        self.assertIn("17 May 2026", html)
 
 
-@override_settings(MEDIA_ROOT=str(Path("/tmp/wallbox-test-media")))
+@override_settings(MEDIA_ROOT=str(Path("/tmp/wallbox-test-media")), **REPORTER_OVERRIDES)
 class AttachPdfToReportTests(TestCase):
     def setUp(self):
         media = Path("/tmp/wallbox-test-media")
