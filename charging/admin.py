@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import ChargingSession, Tariff
+from .models import ChargingSession, MonthlyHouseUsage, Tariff
 
 
 @admin.register(ChargingSession)
@@ -40,3 +40,16 @@ class TariffAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(MonthlyHouseUsage)
+class MonthlyHouseUsageAdmin(admin.ModelAdmin):
+    list_display = (
+        "year",
+        "month",
+        "meter_start_kwh",
+        "meter_end_kwh",
+        "kwh_total",
+    )
+    list_filter = ("year",)
+    ordering = ("-year", "-month")

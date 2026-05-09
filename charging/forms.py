@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django import forms
 
-from .models import Tariff
+from .models import MonthlyHouseUsage, Tariff
 
 
 class TariffForm(forms.ModelForm):
@@ -30,3 +30,15 @@ class TariffForm(forms.ModelForm):
         if value < Decimal("0"):
             raise forms.ValidationError("Base fee must not be negative.")
         return value
+
+
+class HouseUsageForm(forms.ModelForm):
+    class Meta:
+        model = MonthlyHouseUsage
+        fields = [
+            "year",
+            "month",
+            "meter_start_kwh",
+            "meter_end_kwh",
+            "kwh_total",
+        ]
