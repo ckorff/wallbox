@@ -20,11 +20,22 @@ When in doubt, do less, not more.
 ## Hardware Setup
 - **Wallbox:** KEBA P30 x-series (LAN/WLAN, IP configured in app settings)
 - **Vehicle:** Audi Q6 e-tron
-- - **Communication:** UDP via Python's `socket` module (no extra library)
-  - KEBA exposes a UDP-based report protocol on port 7090
-  - Commands `report 100` … `report 130` return the latest 30 sessions as JSON
-  - UDP is fine for low-frequency polling of historical sessions; we are not
-    polling live state at high frequency, so the WLAN latency is acceptable.
+- **Communication:** HTTP against the wallbox web UI (stdlib `urllib`, no
+  extra library). The browser login flow is replayed:
+  1. `GET /` to receive a `PHPSESSID` cookie + CSRF token from
+     `<meta name="csrf-token">`
+  2. `POST /ajax.php` with JSON `{username, password, csrftoken}`
+  3. `GET /export.php?chargingsessions=&t=<ms>` returns the
+     semicolon-separated session CSV
+- **Why HTTP, not OCPP / UDP / Modbus:** OCPP and UDP `report 1xx` polling
+  were both tried and discarded. The CSV export wins because TCP is
+  reliable on the flaky Wi-Fi link, the wallbox itself persists session
+  history (so backend downtime cannot lose data), and we don't need to
+  detect transitions — we just diff the session list.
+- **Caveat:** the web UI has no documented API; a KEBA firmware update may
+  break the scrape. If `/export.php` ever returns HTML instead of CSV,
+  `KebaAuthError` is raised and points at credentials, but a real
+  endpoint or format change will need re-inspecting `/js/webui.js`.
 
 ## Tariff (as of May 2026)
 - **Energy price:** 38.5 ct/kWh
@@ -38,7 +49,7 @@ When in doubt, do less, not more.
 - Python 3.11, Django 5.x
 - SQLite (single-user app, nothing more is needed)
 - WeasyPrint for PDF generation
-- KEBA integration: Modbus TCP via `pymodbus` (TCP, not UDP, due to WLAN latency)
+- KEBA integration: HTTP CSV scrape via stdlib `urllib` (no third-party HTTP client)
 - Email delivery: Django's built-in email framework over SMTP (config from `.env`)
 - Scheduled tasks: systemd timer (no Celery, no cron-overkill)
 - Django i18n: `LANGUAGE_CODE = 'en'`, `TIME_ZONE = 'Europe/Berlin'`
@@ -61,37 +72,23 @@ When in doubt, do less, not more.
 ## Useful Commands
 ```bash
 source .venv/bin/activate
-python manage.py runserver 0.0.0.0:8000   # reachable on LAN
-python manage.py ocpp_serve               # OCPP 1.6-J server (port 9000)
-python manage.py keba_status              # live wallbox snapshot via Modbus
+python manage.py runserver 0.0.0.0:8000        # reachable on LAN
+python manage.py keba_import                   # fetch + ingest live wallbox CSV
+python manage.py keba_import --file <path.csv> # ingest a CSV downloaded by hand
 python manage.py makemigrations
 python manage.py migrate
 python manage.py test
 ```
 
-## OCPP Wallbox Configuration
-In the KEBA web UI, configure the OCPP backend to:
-- Backend URL: `ws://<lxc-host>:9000/ocpp/keba-home`
-- ChargeBoxId: `keba-home` (must match the URL path segment)
-- Authentication: HTTP Basic Auth, username/password from `.env`
-- Subprotocol: `ocpp1.6`
-
-The systemd unit at `deploy/wallbox-ocpp.service` runs the OCPP server as
-a daemon. To install:
-```bash
-sudo cp deploy/wallbox-ocpp.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now wallbox-ocpp
-```
-
 ## Initial Data Model (to be refined with Claude Code)
 - `Tariff` – energy price (ct/kWh), base fee (€/month), `valid_from`
-- `ChargingSession` – start, end, kWh, meter_start, meter_end, note
+- `ChargingSession` – serial, started_at, ended_at, energy_kwh, raw_row
+  (full CSV row as JSON). Natural key: `(serial, started_at)`. Implemented.
 - `MonthlyHouseUsage` – year, month, household kWh (manual entry)
 - `MonthlyReport` – year, month, PDF path, send status, send date
 
 ## Planned Features
-1. **Automatic capture** of charging sessions from the KEBA P30 x via Modbus TCP
+1. **Automatic capture** of charging sessions from the KEBA P30 x via HTTP CSV import (`keba_import`)
 2. **Tariff management** with historical validity
 3. **Manual entry** of monthly household consumption
 4. **PDF report** in a professional, English-language layout containing:
@@ -105,15 +102,11 @@ sudo systemctl enable --now wallbox-ocpp
 ## Open Questions / TODO
 - **SMTP server:** to be decided (own server / IONOS / Mailgun / Gmail SMTP / …)
 - **Recipient email:** work email address goes into `.env`
-- **KEBA IP:** stored in app settings once the integration begins
 - **Behaviour when household consumption is missing:** pause billing or
   generate the report without the base fee? – decide when implementing reports
-- **Modbus TCP** must be enabled in the KEBA firmware (DIP switch DSW1.3 = ON,
-  unit ID = 255). Minimum firmware: x-series 1.11. Modbus TCP and the
-  UDP/KeContact interface are mutually exclusive.
-- **No session ID register exists** in the KEBA Modbus map — new charging
-  sessions must be detected from `charging_state` transitions or from the
-  session-energy register resetting to 0.
+- **Automation:** `keba_import` is run manually today. Once we know how
+  often the wallbox CSV truncates, decide on a systemd timer cadence
+  (likely daily) and add retry/backoff for the flaky-WLAN case.
 
 ## What Claude Should Do
 - For new features: write the test first, then the implementation (TDD)
