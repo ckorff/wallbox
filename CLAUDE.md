@@ -80,7 +80,7 @@ Email delivery, scheduled imports/report generation, dashboards.
 
 ## Conventions
 - Code, comments, identifiers, UI texts, templates and PDF/email exports: **English**
-- Date/time format: ISO 8601 internally; "8 May 2026" or "2026-05" in UI/PDF
+- Date/time format: ISO 8601 internally; DE numeric ("01.05.2026") or "2026-05" in UI/PDF
 - Time zone: Europe/Berlin (sessions stored in local time for clean monthly cuts)
 - Currency: EUR, formatted as "€ 12.34" or "12.34 EUR"
 - Money: `Decimal`, never `float`
