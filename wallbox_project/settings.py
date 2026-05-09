@@ -12,8 +12,13 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 
+import environ
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+env = environ.Env()
+env.read_env(BASE_DIR / ".env")
 
 
 # Quick-start development settings - unsuitable for production
@@ -121,3 +126,9 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# KEBA P30 wallbox — UDP report protocol (port 7090 by default).
+# Note: do NOT reuse KEBA_PORT from .env; that one is the Modbus TCP port (502).
+KEBA_HOST = env("KEBA_HOST", default="")
+KEBA_UDP_PORT = env.int("KEBA_UDP_PORT", default=7090)
