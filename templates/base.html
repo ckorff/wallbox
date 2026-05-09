@@ -1,0 +1,125 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}Wallbox{% endblock %} – Wallbox</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #fafafa;
+    }
+    .topnav {
+      display: flex;
+      align-items: center;
+      gap: 1.2em;
+      padding: 0.7em 1.5em;
+      background: #2c3e50;
+      color: #fff;
+    }
+    .topnav .brand {
+      font-weight: bold;
+      font-size: 1.15em;
+      color: #fff;
+      text-decoration: none;
+      margin-right: 1em;
+    }
+    .topnav a {
+      color: #fff;
+      text-decoration: none;
+      padding: 0.25em 0.5em;
+      border-radius: 3px;
+    }
+    .topnav a:hover {
+      background: rgba(255, 255, 255, 0.12);
+    }
+    .topnav a.active {
+      background: rgba(255, 255, 255, 0.22);
+    }
+    .topnav .right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 0.6em;
+      color: #cfd6dc;
+      font-size: 0.95em;
+    }
+    .topnav .right form.logout {
+      display: inline;
+      margin: 0;
+      padding: 0;
+    }
+    .topnav .right form.logout button {
+      background: none;
+      border: none;
+      color: #fff;
+      cursor: pointer;
+      padding: 0.25em 0.5em;
+      font: inherit;
+      border-radius: 3px;
+    }
+    .topnav .right form.logout button:hover {
+      background: rgba(255, 255, 255, 0.12);
+    }
+    main {
+      max-width: 1000px;
+      margin: 2em auto;
+      padding: 0 1em;
+    }
+    .messages {
+      margin: 1em 0;
+      padding: 0;
+      list-style: none;
+    }
+    .messages li {
+      padding: 0.5em 0.8em;
+      border: 1px solid #b6e0a3;
+      background: #e8f5e0;
+      margin-bottom: 0.3em;
+      border-radius: 3px;
+    }
+    .messages li.warning {
+      border-color: #e0d0a3;
+      background: #f5efe0;
+    }
+    .messages li.error {
+      border-color: #e0a3a3;
+      background: #f5e0e0;
+    }
+  </style>
+</head>
+<body>
+  <nav class="topnav">
+    <a href="{% url 'dashboard' %}" class="brand">Wallbox</a>
+    <a href="{% url 'dashboard' %}"
+       class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">Dashboard</a>
+    <a href="{% url 'reports_index' %}"
+       class="{% if request.resolver_match.url_name == 'reports_index' %}active{% endif %}">Reports</a>
+    <a href="{% url 'tariff_settings' %}"
+       class="{% if request.resolver_match.url_name == 'tariff_settings' %}active{% endif %}">Tariff</a>
+    <a href="{% url 'admin:index' %}">Admin</a>
+    <span class="right">
+      {% if user.is_authenticated %}
+        <span>{{ user.username }}</span>
+        <form method="post" action="{% url 'admin:logout' %}" class="logout">
+          {% csrf_token %}
+          <button type="submit">Logout</button>
+        </form>
+      {% endif %}
+    </span>
+  </nav>
+
+  <main>
+    {% if messages %}
+      <ul class="messages">
+        {% for message in messages %}
+          <li class="{{ message.tags }}">{{ message }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

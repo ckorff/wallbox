@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<style>
+  .card {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 1em 1.4em;
+    margin-bottom: 1.4em;
+  }
+  .card h2 { margin-top: 0; }
+  dl.status { display: grid; grid-template-columns: max-content 1fr; gap: 0.4em 1.4em; margin: 0; }
+  dl.status dt { font-weight: bold; color: #555; }
+  dl.status dd { margin: 0; }
+  .actions form { display: inline; margin-right: 1em; }
+  .muted { color: #888; }
+  .disabled-link {
+    color: #aaa;
+    text-decoration: line-through;
+  }
+</style>
+
+<h1>Dashboard</h1>
+
+<section class="card">
+  <h2>Status</h2>
+  <dl class="status">
+    <dt>Charging sessions</dt>
+    <dd>{{ session_total }}</dd>
+
+    <dt>Last imported session</dt>
+    <dd>
+      {% if last_session %}
+        {{ last_session.started_at|date:"d.m.Y H:i" }}
+      {% else %}
+        <span class="muted">no sessions yet</span>
+      {% endif %}
+    </dd>
+
+    <dt>Total energy captured</dt>
+    <dd>{{ total_kwh }} kWh</dd>
+
+    <dt>Latest report</dt>
+    <dd>
+      {% if latest_report %}
+        {{ latest_report.year }}-{{ latest_report.month|stringformat:"02d" }}
+        <span class="muted">(generated {{ latest_report.generated_at|date:"d.m.Y H:i" }})</span>
+      {% else %}
+        <span class="muted">no reports yet</span>
+      {% endif %}
+    </dd>
+  </dl>
+</section>
+
+<section class="card actions">
+  <h2>Actions</h2>
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="run_import">
+    <button type="submit">Run import now</button>
+  </form>
+
+  {% if latest_report and latest_report.pdf %}
+    <a href="{{ latest_report.pdf.url }}">Open latest report</a>
+  {% else %}
+    <span class="disabled-link" title="No report PDF available yet">Open latest report</span>
+  {% endif %}
+</section>
+{% endblock %}

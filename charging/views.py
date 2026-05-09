@@ -1,19 +1,64 @@
+import logging
 from datetime import date
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
+from django.db.models import Sum
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
 from .forms import TariffForm
 from .models import ChargingSession, MonthlyReport, Tariff
+from .services.import_runner import run_keba_import
 from .services.pdf import attach_pdf_to_report
 from .services.reports import MissingTariffError, generate_monthly_report
 
 
 BERLIN = ZoneInfo("Europe/Berlin")
+logger = logging.getLogger(__name__)
+
+
+@staff_member_required
+def dashboard(request):
+    if request.method == "POST" and request.POST.get("action") == "run_import":
+        try:
+            result = run_keba_import()
+        except Exception as exc:
+            logger.exception("keba_import failed from dashboard")
+            messages.error(
+                request,
+                f"Import failed ({type(exc).__name__}): {exc}",
+            )
+        else:
+            messages.success(
+                request,
+                f"Import finished: {result.sessions_imported} new session(s) "
+                f"imported, {result.sessions_updated} updated, "
+                f"{result.sessions_skipped} skipped.",
+            )
+        return redirect(reverse("dashboard"))
+
+    session_total = ChargingSession.objects.count()
+    last_session = ChargingSession.objects.order_by("-started_at").first()
+    total_kwh = (
+        ChargingSession.objects.aggregate(s=Sum("energy_kwh"))["s"]
+        or Decimal("0")
+    )
+    latest_report = MonthlyReport.objects.order_by("-year", "-month").first()
+
+    return render(
+        request,
+        "charging/dashboard.html",
+        {
+            "session_total": session_total,
+            "last_session": last_session,
+            "total_kwh": total_kwh,
+            "latest_report": latest_report,
+        },
+    )
 
 
 @staff_member_required
