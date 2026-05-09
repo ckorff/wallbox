@@ -80,6 +80,15 @@ Email delivery, scheduled imports/report generation, dashboards.
 - venv at `.venv/`
 - Access via VS Code Remote SSH
 
+## Reporter and vehicle profile
+The PDF needs identifying data that is not in the database. It is read
+from `.env` via django-environ:
+- `REPORTER_NAME`, `REPORTER_EMPLOYEE_ID`
+- `VEHICLE_MAKE_MODEL`, `VEHICLE_LICENSE_PLATE`
+- `CHARGING_LOCATION` (may include line breaks – use `\n` in the .env value)
+A missing required value should fail loudly at startup, not silently
+render a blank field in the PDF.
+
 ## Conventions
 - Code, comments, identifiers, UI texts, templates and PDF/email exports: **English**
 - Date/time format: ISO 8601 internally; "8 May 2026" or "2026-05" in UI/PDF
@@ -150,14 +159,23 @@ python manage.py test
    small amount of inline CSS is fine; no Tailwind / Bootstrap.
 
 ## PDF layout (English, professional, A4 portrait)
-- Header block: report title, month + year, generation date, vehicle
-  ("Audi Q6 e-tron"), reporting period (`YYYY-MM-01` to last of month).
-- Table of all charging sessions: date, start, end, kWh, applicable
-  tariff (ct/kWh), line cost.
+- Header block (single column, label + value rows):
+  - **Title:** "Charging Cost Report — <Month> <Year>"
+  - Reporter             (from env: `REPORTER_NAME`)
+  - Employee ID          (from env: `REPORTER_EMPLOYEE_ID`)
+  - Vehicle              (from env: `VEHICLE_MAKE_MODEL`)
+  - License plate        (from env: `VEHICLE_LICENSE_PLATE`)
+  - Charging location    (from env: `CHARGING_LOCATION`, may be multi-line)
+  - Reporting period     ("1 – 31 May 2026")
+  - Generated            ("9 May 2026")
+- Date format: explicit English long form everywhere ("7 May 2026"). Never
+  rely on system locale; always use Django's `|date:"j F Y"` filter.
+- Sessions table: Date, Start, End, kWh, Tariff (ct/kWh), Line cost (€).
+  Numeric columns right-aligned. Footer row with totals.
 - Summary block:
   - Total energy charged at home: `xx.xxx kWh`
   - Total energy cost: `€ xx.xx`
-  - **Grand total to be reimbursed:** `€ xx.xx` (bold, larger font)
+  - **Grand total to be reimbursed:** `€ xx.xx` (bold, larger font, distinct row)
 - Footer: "Generated automatically from the KEBA P30 wallbox session log."
 
 ## Out of scope right now (do not build)
