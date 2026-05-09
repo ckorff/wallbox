@@ -10,6 +10,7 @@ class ChargingSessionAdmin(admin.ModelAdmin):
         "ended_at",
         "energy_kwh",
         "serial",
+        "updated_at",
     )
     list_filter = ("serial",)
     search_fields = ("serial",)
