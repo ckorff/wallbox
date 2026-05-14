@@ -51,7 +51,7 @@
               </button>
             </form>
             {% if entry.has_pdf %}
-              <a href="{{ entry.report.pdf.url }}">Download PDF</a>
+              <a href="{{ entry.report.pdf.url }}?v={{ entry.report.generated_at|date:'U' }}">Download PDF</a>
             {% endif %}
           </td>
         </tr>

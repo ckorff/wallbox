@@ -25,9 +25,11 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        verbosity = options.get("verbosity", 1)
+        log = self.stdout.write if verbosity >= 2 else None
         try:
             result = run_keba_import(
-                file=options["file"], host=options["host"]
+                file=options["file"], host=options["host"], log=log
             )
         except RuntimeError as exc:
             raise CommandError(str(exc))

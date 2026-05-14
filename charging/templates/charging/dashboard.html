@@ -64,7 +64,7 @@
   </form>
 
   {% if latest_report and latest_report.pdf %}
-    <a href="{{ latest_report.pdf.url }}">Open latest report</a>
+    <a href="{{ latest_report.pdf.url }}?v={{ latest_report.generated_at|date:'U' }}">Open latest report</a>
   {% else %}
     <span class="disabled-link" title="No report PDF available yet">Open latest report</span>
   {% endif %}

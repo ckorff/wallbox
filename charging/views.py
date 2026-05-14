@@ -24,14 +24,17 @@ logger = logging.getLogger(__name__)
 @staff_member_required
 def dashboard(request):
     if request.method == "POST" and request.POST.get("action") == "run_import":
+        log_lines: list[str] = []
         try:
-            result = run_keba_import()
+            result = run_keba_import(log=log_lines.append)
         except Exception as exc:
             logger.exception("keba_import failed from dashboard")
             messages.error(
                 request,
                 f"Import failed ({type(exc).__name__}): {exc}",
             )
+            if log_lines:
+                messages.info(request, "\n".join(log_lines), extra_tags="log")
         else:
             messages.success(
                 request,
@@ -39,6 +42,8 @@ def dashboard(request):
                 f"imported, {result.sessions_updated} updated, "
                 f"{result.sessions_skipped} skipped.",
             )
+            if log_lines:
+                messages.info(request, "\n".join(log_lines), extra_tags="log")
         return redirect(reverse("dashboard"))
 
     session_total = ChargingSession.objects.count()

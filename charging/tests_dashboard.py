@@ -1,7 +1,7 @@
 """Tests for the /dashboard/ view, root redirect and base-template migration."""
 from datetime import date, datetime
 from decimal import Decimal
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
@@ -111,7 +111,7 @@ class DashboardRunImportTests(TestCase):
                 {"action": "run_import"},
             )
 
-        runner.assert_called_once_with()
+        runner.assert_called_once_with(log=ANY)
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse("dashboard"))
 
@@ -121,6 +121,27 @@ class DashboardRunImportTests(TestCase):
             any("3" in m for m in msgs),
             f"Expected success message containing '3', got {msgs!r}",
         )
+
+    def test_post_run_import_renders_per_row_log_block(self):
+        def _fake_import(*, log):
+            log("Fetched 711 bytes")
+            log("Parsed 6 row(s) from CSV")
+            log("  created  07-05-2026 15:33:35   27.64 kWh")
+            log("  skipped  07-05-2026 15:31:39   0 kWh (RFID swipe)")
+            return ImportResult(
+                sessions_imported=1, sessions_skipped=1, rows_seen=2
+            )
+
+        with patch("charging.views.run_keba_import", side_effect=_fake_import):
+            self.client.post(reverse("dashboard"), {"action": "run_import"})
+
+        followed = self.client.get(reverse("dashboard"))
+        # Log lines are emitted as a single info-tagged message with the
+        # "log" extra tag. Django renders tags alphabetically, so the
+        # rendered class is "log info".
+        self.assertContains(followed, 'class="log info"')
+        self.assertContains(followed, "Fetched 711 bytes")
+        self.assertContains(followed, "created  07-05-2026 15:33:35")
 
     def test_post_run_import_failure_queues_error_message(self):
         with patch(

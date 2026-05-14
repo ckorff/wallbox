@@ -135,6 +135,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 KEBA_HOST = env("KEBA_HOST", default="")
 KEBA_USERNAME = env("KEBA_USERNAME", default="")
 KEBA_PASSWORD = env("KEBA_PASSWORD", default="")
+# Diagnostic tee: if set, every fetched CSV body is written here before parse.
+KEBA_DUMP_DIR = env("KEBA_DUMP_DIR", default="")
 
 # Reporter and vehicle profile — printed on every monthly PDF report.
 # Required: missing values raise ImproperlyConfigured at startup so we never

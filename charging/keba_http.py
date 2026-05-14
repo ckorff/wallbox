@@ -18,7 +18,9 @@ import io
 import json
 import re
 import time
+from datetime import datetime
 from http.cookiejar import CookieJar
+from pathlib import Path
 from urllib.request import HTTPCookieProcessor, Request, build_opener
 
 
@@ -53,6 +55,7 @@ def fetch_sessions_csv(
     password: str,
     *,
     timeout: float = DEFAULT_TIMEOUT,
+    dump_dir: str | Path | None = None,
 ) -> str:
     opener = build_opener(HTTPCookieProcessor(CookieJar()))
 
@@ -70,6 +73,11 @@ def fetch_sessions_csv(
         f"http://{host}/export.php?chargingsessions=&t={cache_buster}",
         timeout=timeout,
     )
+    if dump_dir:
+        dest = Path(dump_dir)
+        dest.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y%m%dT%H%M%S")
+        (dest / f"keba_export_{stamp}.csv").write_text(body, encoding="utf-8")
     # On bad credentials the export endpoint 302s to the login page and
     # urllib silently follows the redirect, so we get HTML instead of CSV.
     if body.lstrip().startswith("<"):
