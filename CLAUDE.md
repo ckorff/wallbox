@@ -102,7 +102,7 @@ The PDF needs identifying data that is not in the database. It is read
 from `.env` via django-environ:
 - `REPORTER_NAME`, `REPORTER_EMPLOYEE_ID`
 - `VEHICLE_MAKE_MODEL`, `VEHICLE_LICENSE_PLATE`
-- `CHARGING_LOCATION` (may include line breaks – use `\n` in the .env value)
+- `CHARGING_LOCATION` (single-line string; embed punctuation directly)
 A missing required value should fail loudly at startup, not silently
 render a blank field in the PDF.
 

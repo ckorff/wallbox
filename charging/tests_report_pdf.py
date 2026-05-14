@@ -25,7 +25,7 @@ REPORTER_OVERRIDES = {
     "REPORTER_EMPLOYEE_ID": "EMP-42",
     "VEHICLE_MAKE_MODEL": "Test Make Model",
     "VEHICLE_LICENSE_PLATE": "TS T 1234",
-    "CHARGING_LOCATION": "Teststraße 1\n12345 Testtown, Country",
+    "CHARGING_LOCATION": "Teststraße 1, 12345 Testtown, Country",
 }
 
 
@@ -88,16 +88,7 @@ class ReportHtmlContentTests(TestCase):
         self.assertIn("EMP-42", html)
         self.assertIn("Test Make Model", html)
         self.assertIn("TS T 1234", html)
-        # First line of the multi-line address.
-        self.assertIn("Teststraße 1", html)
-        self.assertIn("12345 Testtown, Country", html)
-
-    def test_html_renders_charging_location_newlines_as_br(self):
-        report = _seed_basic_report()
-        html = self._render_html(report)
-
-        # |linebreaksbr converts \n into <br>.
-        self.assertRegex(html, r"Teststraße 1\s*<br\s*/?>\s*12345 Testtown")
+        self.assertIn("Teststraße 1, 12345 Testtown, Country", html)
 
     def test_html_uses_only_english_long_form_dates(self):
         report = _seed_basic_report()
