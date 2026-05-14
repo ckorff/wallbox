@@ -29,5 +29,6 @@ urlpatterns = [
     path('', include('charging.urls')),
 ]
 
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# Single-user LAN-only deployment: serve /media/ unconditionally via
+# Django so report PDFs work under Gunicorn (DEBUG=False).
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
