@@ -3,62 +3,71 @@
 {% block title %}Reports{% endblock %}
 
 {% block content %}
-<style>
-  table.reports { border-collapse: collapse; width: 100%; margin-top: 1em; }
-  table.reports th, table.reports td {
-    border: 1px solid #ccc; padding: 0.4em 0.7em; text-align: left; vertical-align: middle;
-  }
-  table.reports th { background: #f2f2f2; }
-  table.reports td.num { text-align: right; }
-  form.inline { display: inline; margin: 0; padding: 0; }
-  form.inline button { margin-right: 0.4em; }
-  .muted { color: #777; }
-</style>
-
-<h1>Reports</h1>
+<h1 class="text-2xl font-medium mb-8">Reports</h1>
 
 {% if entries %}
-  <table class="reports">
-    <thead>
-      <tr>
-        <th>Month</th>
-        <th>State</th>
-        <th class="num">Total</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for entry in entries %}
-        <tr>
-          <td>{{ entry.label }} <span class="muted">({{ entry.year }}-{{ entry.month|stringformat:"02d" }})</span></td>
-          <td>
-            {% if entry.report %}
-              Generated on {{ entry.report.generated_at|date:"d.m.Y H:i" }}
-            {% else %}
-              Not generated
-            {% endif %}
-          </td>
-          <td class="num">
-            {% if entry.report %}€ {{ entry.report.total_amount_eur }}{% endif %}
-          </td>
-          <td>
-            <form method="post" class="inline">
-              {% csrf_token %}
-              <input type="hidden" name="year" value="{{ entry.year }}">
-              <input type="hidden" name="month" value="{{ entry.month }}">
-              <button type="submit">
-                {% if entry.report %}Regenerate{% else %}Generate{% endif %}
-              </button>
-            </form>
-            {% if entry.has_pdf %}
-              <a href="{{ entry.report.pdf.url }}?v={{ entry.report.generated_at|date:'U' }}">Download PDF</a>
-            {% endif %}
-          </td>
+  <section class="bg-card border border-[rgba(94,234,255,0.10)] rounded-card overflow-hidden">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-text-muted uppercase tracking-[0.14em] text-[11px] font-medium">
+          <th class="text-left px-5 py-3">Month</th>
+          <th class="text-left px-5 py-3">State</th>
+          <th class="text-right px-5 py-3">Total</th>
+          <th class="text-left px-5 py-3">Actions</th>
         </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        {% for entry in entries %}
+          <tr class="border-t border-[rgba(94,234,255,0.08)] hover:bg-row-hover transition-colors align-middle">
+            <td class="px-5 py-3 text-text-primary">
+              {{ entry.label }}
+              <span class="text-text-muted ml-1">
+                ({{ entry.year }}-{{ entry.month|stringformat:"02d" }})
+              </span>
+            </td>
+            <td class="px-5 py-3 text-text-secondary">
+              {% if entry.report %}
+                <span class="inline-flex items-center gap-1 text-text-primary">
+                  <i class="ti ti-circle-check text-accent"></i>
+                  <span>Generated on {{ entry.report.generated_at|date:"d.m.Y H:i" }}</span>
+                </span>
+              {% else %}
+                <span class="text-text-muted">Not generated</span>
+              {% endif %}
+            </td>
+            <td class="px-5 py-3 text-right text-text-primary tabular-nums">
+              {% if entry.report %}€ {{ entry.report.total_amount_eur }}{% endif %}
+            </td>
+            <td class="px-5 py-3">
+              <div class="flex items-center gap-2 flex-wrap">
+                <form method="post" class="m-0 p-0 inline">
+                  {% csrf_token %}
+                  <input type="hidden" name="year" value="{{ entry.year }}">
+                  <input type="hidden" name="month" value="{{ entry.month }}">
+                  <button type="submit"
+                          class="inline-flex items-center gap-1 border border-accent text-accent hover:bg-accent hover:text-bg font-medium px-3 py-1.5 rounded-btn transition-colors text-sm cursor-pointer">
+                    <i class="ti {% if entry.report %}ti-refresh{% else %}ti-player-play{% endif %}"></i>
+                    <span>{% if entry.report %}Regenerate{% else %}Generate{% endif %}</span>
+                  </button>
+                </form>
+                {% if entry.has_pdf %}
+                  <a href="{{ entry.report.pdf.url }}?v={{ entry.report.generated_at|date:'U' }}"
+                     class="inline-flex items-center gap-1 border border-[rgba(94,234,255,0.20)] text-text-primary hover:border-accent hover:text-accent font-medium px-3 py-1.5 rounded-btn transition-colors text-sm">
+                    <i class="ti ti-download"></i>
+                    <span>Download PDF</span>
+                  </a>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
 {% else %}
-  <p>No charging sessions recorded yet — nothing to report.</p>
+  <section class="bg-card border border-[rgba(94,234,255,0.10)] rounded-card p-10 text-center">
+    <i class="ti ti-file-off text-3xl text-text-muted"></i>
+    <p class="text-text-secondary mt-3">No charging sessions recorded yet &mdash; nothing to report.</p>
+  </section>
 {% endif %}
 {% endblock %}
