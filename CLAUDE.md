@@ -36,6 +36,8 @@ and tariff settings UI simplify accordingly.
 
 ### Phase 3: later
 Email delivery, scheduled imports/report generation, dashboards.
+(The web UI itself already runs as a permanent systemd-managed Gunicorn
+service — see Development Environment → Deployment.)
 
 ## Hardware Setup
 - **Wallbox:** KEBA P30 x-series (LAN/WLAN, IP configured in app settings)
@@ -70,6 +72,8 @@ Email delivery, scheduled imports/report generation, dashboards.
 - SQLite (single-user app, nothing more is needed)
 - KEBA integration: HTTP CSV scrape via stdlib `urllib` (no third-party HTTP client)
 - WeasyPrint for PDF generation
+- Web serving: Gunicorn (WSGI) behind no reverse proxy — LAN-only, no HTTPS.
+  WhiteNoise serves static files directly from the Gunicorn process.
 - Email delivery: Django's built-in email framework over SMTP (Phase 3)
 - Scheduled tasks: systemd timer (Phase 3, no Celery, no cron-overkill)
 - Django i18n: `LANGUAGE_CODE = 'en'`, `TIME_ZONE = 'Europe/Berlin'`
@@ -79,6 +83,19 @@ Email delivery, scheduled imports/report generation, dashboards.
 - Code at `~/projects/wallbox`
 - venv at `.venv/`
 - Access via VS Code Remote SSH
+
+### Deployment
+The web UI runs as a permanent systemd-managed Gunicorn service.
+- **Service name:** `wallbox.service`
+- **Unit file:** `/etc/systemd/system/wallbox.service`
+- **Bind:** `0.0.0.0:8000`, 2 workers, 90 s timeout
+- **Logs:** stdout/stderr to journald (`journalctl -u wallbox`)
+- **Restart:** `sudo systemctl restart wallbox` after code/template changes;
+  reload the unit itself with `sudo systemctl daemon-reload`
+- After changing static files: `python manage.py collectstatic --noinput`,
+  then restart the service.
+- `python manage.py runserver` is still fine for ad-hoc dev — stop the
+  service first (`sudo systemctl stop wallbox`) so port 8000 is free.
 
 ## Reporter and vehicle profile
 The PDF needs identifying data that is not in the database. It is read
@@ -101,12 +118,14 @@ render a blank field in the PDF.
 ## Useful Commands
 ```bash
 source .venv/bin/activate
-python manage.py runserver 0.0.0.0:8000                  # reachable on LAN
+sudo systemctl restart wallbox                           # apply code/template changes (service is the runtime)
+journalctl -u wallbox -f                                 # tail web-UI logs
 python manage.py keba_import                             # fetch + ingest live wallbox CSV
 python manage.py keba_import --file <path.csv>           # ingest a CSV downloaded by hand
 python manage.py keba_import -v 2                        # verbose: per-stage + per-row outcomes
 KEBA_DUMP_DIR=debug python manage.py keba_import         # tee the raw HTTP body to debug/ for inspection
 python manage.py generate_report --year 2026 --month 5   # CLI alternative to the UI button
+python manage.py collectstatic --noinput                 # after touching static files
 python manage.py makemigrations
 python manage.py migrate
 python manage.py test
