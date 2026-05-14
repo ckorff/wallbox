@@ -104,6 +104,8 @@ source .venv/bin/activate
 python manage.py runserver 0.0.0.0:8000                  # reachable on LAN
 python manage.py keba_import                             # fetch + ingest live wallbox CSV
 python manage.py keba_import --file <path.csv>           # ingest a CSV downloaded by hand
+python manage.py keba_import -v 2                        # verbose: per-stage + per-row outcomes
+KEBA_DUMP_DIR=debug python manage.py keba_import         # tee the raw HTTP body to debug/ for inspection
 python manage.py generate_report --year 2026 --month 5   # CLI alternative to the UI button
 python manage.py makemigrations
 python manage.py migrate
@@ -208,6 +210,13 @@ imports are a Phase 3 concern.
 - **Automation:** `keba_import` is run manually today. Once we know how
   often the wallbox CSV truncates, decide on a systemd timer cadence
   (likely daily) and add retry/backoff for the flaky-WLAN case.
+- **Importer doesn't detect truncated HTTP responses:** observed on
+  2026-05-14 — flaky WLAN delivered a short CSV body, `parse_sessions_csv`
+  ingested it and two real sessions were silently lost. Hardening
+  (e.g. a row-count floor, or "newest fetched row must not predate the
+  newest DB row") is not in place yet. Until it is, use
+  `KEBA_DUMP_DIR=debug python manage.py keba_import` and diff the dump
+  against a manual UI export whenever sessions look missing.
 
 ## What Claude Should Do
 - For new features: write the test first, then the implementation (TDD)
