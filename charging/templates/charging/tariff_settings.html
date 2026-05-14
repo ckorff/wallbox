@@ -3,47 +3,79 @@
 {% block title %}Tariff settings{% endblock %}
 
 {% block content %}
-<style>
-  table.tariffs { border-collapse: collapse; width: 100%; margin-top: 1em; }
-  table.tariffs th, table.tariffs td {
-    border: 1px solid #ccc; padding: 0.4em 0.7em; text-align: left;
-  }
-  table.tariffs th { background: #f2f2f2; }
-  table.tariffs tr.active { background: #fff7c2; }
-  form p { margin: 0.5em 0; }
-  .errorlist { color: #a40000; margin: 0.2em 0; padding-left: 1.2em; }
-</style>
+<h1 class="text-2xl font-medium mb-8">Tariff settings</h1>
 
-<h1>Tariff settings</h1>
+<div class="uppercase tracking-[0.14em] text-text-muted text-xs font-medium mb-3">
+  Add new tariff
+</div>
 
-<h2>Add new tariff</h2>
-<form method="post">
-  {% csrf_token %}
-  {{ form.as_p }}
-  <p><button type="submit">Save tariff</button></p>
-</form>
+<section class="bg-card border border-[rgba(94,234,255,0.10)] rounded-card p-6 mb-10">
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    {% for field in form %}
+      <div class="flex flex-col gap-1 max-w-md">
+        <label for="{{ field.id_for_label }}" class="text-text-secondary text-sm">
+          {{ field.label }}
+        </label>
+        {{ field }}
+        {% if field.help_text %}
+          <span class="text-xs text-text-muted">{{ field.help_text }}</span>
+        {% endif %}
+        {{ field.errors }}
+      </div>
+    {% endfor %}
+    <div>
+      <button type="submit"
+              class="inline-flex items-center gap-2 bg-accent hover:bg-accent-hover text-bg font-medium px-4 py-2 rounded-btn transition-colors cursor-pointer">
+        <i class="ti ti-device-floppy"></i>
+        <span>Save tariff</span>
+      </button>
+    </div>
+  </form>
+</section>
 
-<h2>Tariff history</h2>
+<div class="uppercase tracking-[0.14em] text-text-muted text-xs font-medium mb-3">
+  Tariff history
+</div>
+
 {% if tariffs %}
-  <table class="tariffs">
-    <thead>
-      <tr>
-        <th>Valid from</th>
-        <th>Energy price (ct/kWh)</th>
-        <th>Active</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for t in tariffs %}
-        <tr class="{% if active_tariff and t.pk == active_tariff.pk %}active{% endif %}">
-          <td>{{ t.valid_from|date:"d.m.Y" }}</td>
-          <td>{{ t.energy_price_ct_per_kwh }}</td>
-          <td>{% if active_tariff and t.pk == active_tariff.pk %}yes{% else %}&nbsp;{% endif %}</td>
+  <section class="bg-card border border-[rgba(94,234,255,0.10)] rounded-card overflow-hidden">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-text-muted uppercase tracking-[0.14em] text-[11px] font-medium">
+          <th class="text-left px-5 py-3">Valid from</th>
+          <th class="text-right px-5 py-3">Energy price (ct/kWh)</th>
+          <th class="text-left px-5 py-3">State</th>
         </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        {% for t in tariffs %}
+          {% with is_active=active_tariff|default_if_none:False %}
+          <tr class="border-t border-[rgba(94,234,255,0.08)] hover:bg-row-hover transition-colors
+                     {% if active_tariff and t.pk == active_tariff.pk %}bg-row-hover{% endif %}">
+            <td class="px-5 py-3 text-text-primary">{{ t.valid_from|date:"d.m.Y" }}</td>
+            <td class="px-5 py-3 text-right text-text-primary tabular-nums">
+              {{ t.energy_price_ct_per_kwh }}
+            </td>
+            <td class="px-5 py-3">
+              {% if active_tariff and t.pk == active_tariff.pk %}
+                <span class="inline-flex items-center gap-1 text-accent text-xs uppercase tracking-[0.14em] font-medium">
+                  <i class="ti ti-circle-check-filled"></i>
+                  <span>Active</span>
+                </span>
+              {% else %}
+                <span class="text-text-muted">&mdash;</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endwith %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
 {% else %}
-  <p>No tariffs recorded yet.</p>
+  <section class="bg-card border border-[rgba(94,234,255,0.10)] rounded-card p-6 text-center text-text-secondary">
+    No tariffs recorded yet.
+  </section>
 {% endif %}
 {% endblock %}
