@@ -3,131 +3,116 @@
 <head>
   <meta charset="utf-8">
   <title>{% block title %}Wallbox{% endblock %} – Wallbox</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      margin: 0;
-      padding: 0;
-      background: #fafafa;
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap">
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            bg:              '#0a1729',
+            card:            '#142844',
+            accent:          '#5beaff',
+            'accent-hover':  '#2dd4ff',
+            'text-primary':   '#e5f1fb',
+            'text-secondary': '#7892ac',
+            'text-muted':     '#5b7a99',
+            'row-hover':      '#1a3252',
+          },
+          borderRadius: { card: '12px', btn: '8px' },
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          boxShadow: { glow: '0 0 24px rgba(91,234,255,0.25)' },
+        }
+      }
     }
-    .topnav {
-      display: flex;
-      align-items: center;
-      gap: 1.2em;
-      padding: 0.7em 1.5em;
-      background: #2c3e50;
-      color: #fff;
-    }
-    .topnav .brand {
-      font-weight: bold;
-      font-size: 1.15em;
-      color: #fff;
-      text-decoration: none;
-      margin-right: 1em;
-    }
-    .topnav a {
-      color: #fff;
-      text-decoration: none;
-      padding: 0.25em 0.5em;
-      border-radius: 3px;
-    }
-    .topnav a:hover {
-      background: rgba(255, 255, 255, 0.12);
-    }
-    .topnav a.active {
-      background: rgba(255, 255, 255, 0.22);
-    }
-    .topnav .right {
-      margin-left: auto;
-      display: flex;
-      align-items: center;
-      gap: 0.6em;
-      color: #cfd6dc;
-      font-size: 0.95em;
-    }
-    .topnav .right form.logout {
-      display: inline;
-      margin: 0;
-      padding: 0;
-    }
-    .topnav .right form.logout button {
-      background: none;
-      border: none;
-      color: #fff;
-      cursor: pointer;
-      padding: 0.25em 0.5em;
-      font: inherit;
-      border-radius: 3px;
-    }
-    .topnav .right form.logout button:hover {
-      background: rgba(255, 255, 255, 0.12);
-    }
-    main {
-      max-width: 1000px;
-      margin: 2em auto;
-      padding: 0 1em;
-    }
-    .messages {
-      margin: 1em 0;
-      padding: 0;
-      list-style: none;
-    }
-    .messages li {
-      padding: 0.5em 0.8em;
-      border: 1px solid #b6e0a3;
-      background: #e8f5e0;
-      margin-bottom: 0.3em;
-      border-radius: 3px;
-    }
-    .messages li.warning {
-      border-color: #e0d0a3;
-      background: #f5efe0;
-    }
-    .messages li.error {
-      border-color: #e0a3a3;
-      background: #f5e0e0;
-    }
-    .messages li.log {
-      border-color: #cfd6dc;
-      background: #f4f6f8;
-      color: #2c3e50;
-      font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-      font-size: 0.9em;
-      white-space: pre-wrap;
+  </script>
+  <style type="text/tailwindcss">
+    @layer base {
+      html { color-scheme: dark; }
+      body { font-family: 'Inter', system-ui, sans-serif; }
+      input[type=text], input[type=number], input[type=date],
+      input[type=email], input[type=password], select, textarea {
+        @apply bg-bg border border-[rgba(94,234,255,0.10)] rounded-btn
+               text-text-primary px-3 py-2 outline-none
+               focus:border-accent focus:ring-1 focus:ring-accent;
+      }
+      label { @apply text-text-secondary text-sm; }
+      .errorlist { @apply text-red-300 text-sm mt-1 list-none p-0; }
     }
   </style>
 </head>
-<body>
-  <nav class="topnav">
-    <a href="{% url 'dashboard' %}" class="brand">Wallbox</a>
-    <a href="{% url 'dashboard' %}"
-       class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">Dashboard</a>
-    <a href="{% url 'reports_index' %}"
-       class="{% if request.resolver_match.url_name == 'reports_index' %}active{% endif %}">Reports</a>
-    <a href="{% url 'tariff_settings' %}"
-       class="{% if request.resolver_match.url_name == 'tariff_settings' %}active{% endif %}">Tariff</a>
-    <a href="{% url 'admin:index' %}">Admin</a>
-    <span class="right">
-      {% if user.is_authenticated %}
-        <span>{{ user.username }}</span>
-        <form method="post" action="{% url 'admin:logout' %}" class="logout">
-          {% csrf_token %}
-          <button type="submit">Logout</button>
-        </form>
-      {% endif %}
-    </span>
+<body class="bg-bg text-text-primary font-sans min-h-screen">
+  <nav class="border-b border-[rgba(94,234,255,0.10)] bg-bg">
+    <div class="max-w-[1200px] mx-auto px-6 h-14 flex items-center gap-6">
+      <a href="{% url 'dashboard' %}"
+         class="flex items-center gap-2 text-accent uppercase tracking-[0.14em] font-medium text-sm">
+        <i class="ti ti-bolt text-base"></i>
+        <span>Wallbox</span>
+      </a>
+
+      {% with url_name=request.resolver_match.url_name %}
+      <a href="{% url 'dashboard' %}"
+         class="text-sm pb-1 border-b-2 {% if url_name == 'dashboard' %}text-accent border-accent{% else %}text-text-secondary border-transparent hover:text-text-primary{% endif %}">
+        Dashboard
+      </a>
+      <a href="{% url 'tariff_settings' %}"
+         class="text-sm pb-1 border-b-2 {% if url_name == 'tariff_settings' %}text-accent border-accent{% else %}text-text-secondary border-transparent hover:text-text-primary{% endif %}">
+        Tariff settings
+      </a>
+      <a href="{% url 'reports_index' %}"
+         class="text-sm pb-1 border-b-2 {% if url_name == 'reports_index' %}text-accent border-accent{% else %}text-text-secondary border-transparent hover:text-text-primary{% endif %}">
+        Reports
+      </a>
+      <a href="{% url 'admin:index' %}"
+         class="text-sm pb-1 border-b-2 text-text-secondary border-transparent hover:text-text-primary">
+        Admin
+      </a>
+      {% endwith %}
+
+      <span class="ml-auto flex items-center gap-3 text-sm text-text-secondary">
+        {% if user.is_authenticated %}
+          <span class="flex items-center gap-1">
+            <i class="ti ti-user text-base"></i>
+            <span>{{ user.username }}</span>
+          </span>
+          <form method="post" action="{% url 'admin:logout' %}" class="m-0 p-0">
+            {% csrf_token %}
+            <button type="submit"
+                    class="flex items-center gap-1 text-text-secondary hover:text-accent cursor-pointer">
+              <i class="ti ti-logout text-base"></i>
+              <span>Logout</span>
+            </button>
+          </form>
+        {% endif %}
+      </span>
+    </div>
   </nav>
 
-  <main>
+  <main class="max-w-[1200px] mx-auto px-6 py-8">
     {% if messages %}
-      <ul class="messages">
+      <div class="bg-card border border-accent rounded-card shadow-glow p-4 mb-6 space-y-2">
         {% for message in messages %}
-          <li class="{{ message.tags }}">{{ message }}</li>
+          <div class="text-sm
+                      {% if message.tags == 'error' %}text-red-300
+                      {% elif message.tags == 'warning' %}text-amber-300
+                      {% elif message.tags == 'log' %}text-text-secondary font-mono whitespace-pre-wrap
+                      {% else %}text-text-primary{% endif %}">
+            {{ message }}
+          </div>
         {% endfor %}
-      </ul>
+      </div>
     {% endif %}
 
     {% block content %}{% endblock %}
   </main>
+
+  <footer class="max-w-[1200px] mx-auto px-6 py-6 text-center text-xs text-text-muted">
+    Wallbox &middot; KEBA P30 session tracker
+  </footer>
 </body>
 </html>
