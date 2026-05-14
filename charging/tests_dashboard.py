@@ -138,8 +138,9 @@ class DashboardRunImportTests(TestCase):
         followed = self.client.get(reverse("dashboard"))
         # Log lines are emitted as a single info-tagged message with the
         # "log" extra tag. Django renders tags alphabetically, so the
-        # rendered class is "log info".
-        self.assertContains(followed, 'class="log info"')
+        # message carries data-tags="log info" (used as a stable hook
+        # for the monospace/pre-wrap styling in base.html).
+        self.assertContains(followed, 'data-tags="log info"')
         self.assertContains(followed, "Fetched 711 bytes")
         self.assertContains(followed, "created  07-05-2026 15:33:35")
 

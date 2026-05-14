@@ -97,10 +97,11 @@
     {% if messages %}
       <div class="bg-card border border-accent rounded-card shadow-glow p-4 mb-6 space-y-2">
         {% for message in messages %}
-          <div class="text-sm
-                      {% if message.tags == 'error' %}text-red-300
-                      {% elif message.tags == 'warning' %}text-amber-300
-                      {% elif message.tags == 'log' %}text-text-secondary font-mono whitespace-pre-wrap
+          <div data-tags="{{ message.tags }}"
+               class="text-sm
+                      {% if 'error' in message.tags %}text-red-300
+                      {% elif 'warning' in message.tags %}text-amber-300
+                      {% elif 'log' in message.tags %}text-text-secondary font-mono whitespace-pre-wrap
                       {% else %}text-text-primary{% endif %}">
             {{ message }}
           </div>
