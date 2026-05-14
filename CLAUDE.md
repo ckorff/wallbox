@@ -189,7 +189,35 @@ highlighted.
 2. **Tariff settings** at `/settings/tariff/`
 3. **Reports** at `/reports/`
 4. Plain server-rendered Django templates. No SPA, no JS framework.
-   Minimal inline CSS in the base template; no Tailwind / Bootstrap.
+   Styling: Tailwind via CDN play-mode, no build pipeline, no other
+   framework, no npm. Loaded in `templates/base.html` only.
+   - Inter via fonts.googleapis.com (weights 400 / 500 only)
+   - Tabler icons via the icon-font CDN, used inline as
+     `<i class="ti ti-name"></i>` where it adds clarity
+
+   Design tokens (do not invent variants — registered under the same
+   names in the inline `tailwind.config` block in `base.html`):
+
+   | Token            | Value                          |
+   |------------------|--------------------------------|
+   | bg               | `#0a1729`                      |
+   | card             | `#142844`                      |
+   | accent           | `#5beaff`                      |
+   | accent-hover     | `#2dd4ff`                      |
+   | text-primary     | `#e5f1fb`                      |
+   | text-secondary   | `#7892ac`                      |
+   | text-muted       | `#5b7a99`                      |
+   | row-hover        | `#1a3252`                      |
+   | card border      | `rgba(94,234,255,0.10)`         |
+   | active border    | `#5beaff` + box-shadow `0 0 24px rgba(91,234,255,0.25)` (`shadow-glow`) |
+   | radii            | 12 px cards (`rounded-card`) / 8 px buttons (`rounded-btn`) |
+   | section label    | uppercase, `tracking-[0.14em]`, colour `text-text-muted` |
+   | font             | Inter, weights 400 and 500 only |
+
+   Active-card glow pattern: on each page the action the user is most
+   likely to use gets `border-accent shadow-glow`; other cards stay on
+   the neutral `border-[rgba(94,234,255,0.10)]`. On the dashboard this
+   is "Run import now".
 
 The "Run import now" button is intentionally synchronous for now – it
 blocks for a few seconds while the wallbox is queried. Async/queued
