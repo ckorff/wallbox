@@ -3,70 +3,121 @@
 {% block title %}Dashboard{% endblock %}
 
 {% block content %}
-<style>
-  .card {
-    background: #fff;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    padding: 1em 1.4em;
-    margin-bottom: 1.4em;
-  }
-  .card h2 { margin-top: 0; }
-  dl.status { display: grid; grid-template-columns: max-content 1fr; gap: 0.4em 1.4em; margin: 0; }
-  dl.status dt { font-weight: bold; color: #555; }
-  dl.status dd { margin: 0; }
-  .actions form { display: inline; margin-right: 1em; }
-  .muted { color: #888; }
-  .disabled-link {
-    color: #aaa;
-    text-decoration: line-through;
-  }
-</style>
+<h1 class="text-2xl font-medium mb-8">Dashboard</h1>
 
-<h1>Dashboard</h1>
+<div class="uppercase tracking-[0.14em] text-text-muted text-xs font-medium mb-3">
+  Status
+</div>
 
-<section class="card">
-  <h2>Status</h2>
-  <dl class="status">
-    <dt>Charging sessions</dt>
-    <dd>{{ session_total }}</dd>
+<section class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+  <div class="bg-card border border-[rgba(94,234,255,0.10)] rounded-card p-5">
+    <div class="flex items-center gap-2 text-text-muted uppercase tracking-[0.14em] text-[11px] font-medium mb-3">
+      <i class="ti ti-plug text-sm"></i>
+      <span>Charging sessions</span>
+    </div>
+    <div class="text-2xl text-text-primary font-medium">{{ session_total }}</div>
+  </div>
 
-    <dt>Last imported session</dt>
-    <dd>
+  <div class="bg-card border border-[rgba(94,234,255,0.10)] rounded-card p-5">
+    <div class="flex items-center gap-2 text-text-muted uppercase tracking-[0.14em] text-[11px] font-medium mb-3">
+      <i class="ti ti-clock text-sm"></i>
+      <span>Last imported</span>
+    </div>
+    <div class="text-2xl text-text-primary font-medium">
       {% if last_session %}
-        {{ last_session.started_at|date:"d.m.Y H:i" }}
+        {{ last_session.started_at|date:"d.m.Y" }}
       {% else %}
-        <span class="muted">no sessions yet</span>
+        <span class="text-text-muted text-base">no sessions yet</span>
       {% endif %}
-    </dd>
+    </div>
+    {% if last_session %}
+      <div class="text-sm text-text-secondary mt-1">
+        {{ last_session.started_at|date:"H:i" }}
+      </div>
+    {% endif %}
+  </div>
 
-    <dt>Total energy captured</dt>
-    <dd>{{ total_kwh }} kWh</dd>
+  <div class="bg-card border border-[rgba(94,234,255,0.10)] rounded-card p-5">
+    <div class="flex items-center gap-2 text-text-muted uppercase tracking-[0.14em] text-[11px] font-medium mb-3">
+      <i class="ti ti-bolt text-sm"></i>
+      <span>Total energy</span>
+    </div>
+    <div class="text-2xl text-text-primary font-medium">
+      {{ total_kwh }} <span class="text-base text-text-secondary">kWh</span>
+    </div>
+  </div>
 
-    <dt>Latest report</dt>
-    <dd>
+  <div class="bg-card border border-[rgba(94,234,255,0.10)] rounded-card p-5">
+    <div class="flex items-center gap-2 text-text-muted uppercase tracking-[0.14em] text-[11px] font-medium mb-3">
+      <i class="ti ti-file-text text-sm"></i>
+      <span>Latest report</span>
+    </div>
+    <div class="text-2xl text-text-primary font-medium">
       {% if latest_report %}
         {{ latest_report.year }}-{{ latest_report.month|stringformat:"02d" }}
-        <span class="muted">(generated {{ latest_report.generated_at|date:"d.m.Y H:i" }})</span>
       {% else %}
-        <span class="muted">no reports yet</span>
+        <span class="text-text-muted text-base">no reports yet</span>
       {% endif %}
-    </dd>
-  </dl>
+    </div>
+    {% if latest_report %}
+      <div class="text-sm text-text-secondary mt-1">
+        generated {{ latest_report.generated_at|date:"d.m.Y H:i" }}
+      </div>
+    {% endif %}
+  </div>
 </section>
 
-<section class="card actions">
-  <h2>Actions</h2>
-  <form method="post">
-    {% csrf_token %}
-    <input type="hidden" name="action" value="run_import">
-    <button type="submit">Run import now</button>
-  </form>
+<div class="uppercase tracking-[0.14em] text-text-muted text-xs font-medium mb-3">
+  Actions
+</div>
 
-  {% if latest_report and latest_report.pdf %}
-    <a href="{{ latest_report.pdf.url }}?v={{ latest_report.generated_at|date:'U' }}">Open latest report</a>
-  {% else %}
-    <span class="disabled-link" title="No report PDF available yet">Open latest report</span>
-  {% endif %}
+<section class="grid grid-cols-1 md:grid-cols-2 gap-4">
+  <div class="bg-card border border-accent rounded-card shadow-glow p-6">
+    <div class="flex items-center gap-2 text-text-muted uppercase tracking-[0.14em] text-[11px] font-medium mb-2">
+      <i class="ti ti-refresh text-sm"></i>
+      <span>Import</span>
+    </div>
+    <h2 class="text-lg text-text-primary font-medium mb-1">Run import now</h2>
+    <p class="text-sm text-text-secondary mb-4">
+      Fetch the latest session CSV from the wallbox and ingest new rows.
+    </p>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="run_import">
+      <button type="submit"
+              class="inline-flex items-center gap-2 bg-accent hover:bg-accent-hover text-bg font-medium px-4 py-2 rounded-btn transition-colors cursor-pointer">
+        <i class="ti ti-refresh"></i>
+        <span>Run import now</span>
+      </button>
+    </form>
+  </div>
+
+  <div class="bg-card border border-[rgba(94,234,255,0.10)] rounded-card p-6">
+    <div class="flex items-center gap-2 text-text-muted uppercase tracking-[0.14em] text-[11px] font-medium mb-2">
+      <i class="ti ti-file-download text-sm"></i>
+      <span>Report</span>
+    </div>
+    <h2 class="text-lg text-text-primary font-medium mb-1">Open latest report</h2>
+    <p class="text-sm text-text-secondary mb-4">
+      {% if latest_report %}
+        {{ latest_report.year }}-{{ latest_report.month|stringformat:"02d" }},
+        generated {{ latest_report.generated_at|date:"d.m.Y H:i" }}.
+      {% else %}
+        No report PDF available yet.
+      {% endif %}
+    </p>
+    {% if latest_report and latest_report.pdf %}
+      <a href="{{ latest_report.pdf.url }}?v={{ latest_report.generated_at|date:'U' }}"
+         class="inline-flex items-center gap-2 border border-accent text-accent hover:bg-accent hover:text-bg font-medium px-4 py-2 rounded-btn transition-colors">
+        <i class="ti ti-file-download"></i>
+        <span>Open latest report</span>
+      </a>
+    {% else %}
+      <span class="inline-flex items-center gap-2 border border-[rgba(94,234,255,0.10)] text-text-muted font-medium px-4 py-2 rounded-btn cursor-not-allowed">
+        <i class="ti ti-file-download"></i>
+        <span>Open latest report</span>
+      </span>
+    {% endif %}
+  </div>
 </section>
 {% endblock %}
