@@ -43,7 +43,7 @@
       <span>Total energy</span>
     </div>
     <div class="text-2xl text-text-primary font-medium">
-      {{ total_kwh }} <span class="text-base text-text-secondary">kWh</span>
+      {{ total_kwh|floatformat:3 }} <span class="text-base text-text-secondary">kWh</span>
     </div>
   </div>
 
