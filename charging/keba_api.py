@@ -105,6 +105,13 @@ class KebaApiClient:
                 )
         return body
 
+    def list_sessions(self) -> list[dict]:
+        """Return the sessions array from /v2/sessions, MVA records included."""
+        status, _, body = self._authed_request("GET", "/v2/sessions")
+        if status != 200:
+            raise KebaAuthError(f"list_sessions failed (status {status})")
+        return json.loads(body)["sessions"]
+
     def get_state(self, serial: str) -> dict:
         status, _, body = self._authed_request(
             "GET", f"/v2/wallboxes/{serial}/state"

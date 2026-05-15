@@ -17,7 +17,7 @@ from charging.keba_api import (
 )
 from charging.keba_csv import parse_sessions_csv
 from charging.models import ChargingSession
-from charging.services import ingest_csv_row
+from charging.services import ingest_csv_row, ingest_json_row
 
 
 SAMPLE_CSV = (
@@ -297,3 +297,115 @@ class KebaApiClientTests(TestCase):
         self.assertEqual(result, info)
         call = mock_req.call_args
         self.assertEqual(call.args, ("GET", "/v2/wallboxes/34416115"))
+
+    @patch("charging.keba_api.KebaApiClient._request")
+    def test_list_sessions_returns_sessions_array(self, mock_req):
+        self._seed_cache()
+        payload = json.dumps(
+            {
+                "sessions": [
+                    {
+                        "id": 1,
+                        "wallboxSerialNumber": "34416115",
+                        "startDate": 1778707926397,
+                        "endDate": 1778745614889,
+                        "energyConsumedInKwh": 51.5707,
+                    }
+                ]
+            }
+        ).encode("utf-8")
+        mock_req.return_value = (200, {}, payload)
+
+        client = self._client()
+        result = client.list_sessions()
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["wallboxSerialNumber"], "34416115")
+        call = mock_req.call_args
+        self.assertEqual(call.args, ("GET", "/v2/sessions"))
+
+
+class IngestJsonRowTests(TestCase):
+    """Counterpart of IngestCsvRowTests for the /v2/sessions JSON shape."""
+
+    def _row(self, **overrides):
+        base = {
+            "id": 591466681,
+            "wallboxSerialNumber": "34416115",
+            "tokenId": "044115CA911E94",
+            "status": "CLOSED",
+            "startDate": 1778707926397,   # 2026-05-13 23:32:06.397 CEST
+            "endDate": 1778745614889,     # 2026-05-14 10:00:14.889 CEST
+            "duration": 37688492,
+            "energyConsumedInKwh": 27.64,
+            "mvaRecordData": '{"FV":"1.1","GI":"KEBA_KCP30"}',
+            "mvaRecordSignature": '{"SD":"3046..."}',
+        }
+        base.update(overrides)
+        return base
+
+    def test_creates_new_session_with_mva_fields(self):
+        row = self._row()
+
+        obj, created = ingest_json_row(row)
+
+        self.assertTrue(created)
+        self.assertEqual(obj.serial, "34416115")
+        self.assertEqual(obj.energy_kwh, Decimal("27.640"))
+        # Microseconds stripped so the (serial, started_at) natural key
+        # aligns with the CSV path's second-precision timestamps.
+        self.assertEqual(
+            obj.started_at,
+            datetime(2026, 5, 13, 23, 32, 6, tzinfo=BERLIN),
+        )
+        self.assertEqual(obj.started_at.microsecond, 0)
+        self.assertEqual(
+            obj.ended_at,
+            datetime(2026, 5, 14, 10, 0, 14, tzinfo=BERLIN),
+        )
+        self.assertEqual(obj.raw_row, row)
+        self.assertEqual(obj.mva_record_data, '{"FV":"1.1","GI":"KEBA_KCP30"}')
+        self.assertEqual(obj.mva_record_signature, '{"SD":"3046..."}')
+
+    def test_handles_missing_mva_fields(self):
+        # Older firmware / not-yet-signed sessions might lack these.
+        row = self._row()
+        del row["mvaRecordData"]
+        del row["mvaRecordSignature"]
+
+        obj, created = ingest_json_row(row)
+
+        self.assertTrue(created)
+        self.assertIsNone(obj.mva_record_data)
+        self.assertIsNone(obj.mva_record_signature)
+
+    def test_skips_zero_kwh_touch_session(self):
+        obj, created = ingest_json_row(self._row(energyConsumedInKwh=0))
+
+        self.assertIsNone(obj)
+        self.assertFalse(created)
+
+    def test_re_import_updates_existing_row(self):
+        ingest_json_row(self._row())
+
+        obj, created = ingest_json_row(
+            self._row(
+                energyConsumedInKwh=27.65,
+                mvaRecordData='{"UPDATED":"true"}',
+            )
+        )
+
+        self.assertFalse(created)
+        self.assertEqual(obj.energy_kwh, Decimal("27.650"))
+        self.assertEqual(obj.mva_record_data, '{"UPDATED":"true"}')
+        self.assertEqual(ChargingSession.objects.count(), 1)
+
+    def test_winter_timestamp_uses_cet_not_cest(self):
+        # DST safety: a January timestamp lands at UTC+01:00 in Berlin.
+        expected = datetime(2026, 1, 15, 12, 0, 0, tzinfo=BERLIN)
+        ms = int(expected.timestamp() * 1000)
+        row = self._row(startDate=ms, endDate=ms + 1_000_000)
+
+        obj, _ = ingest_json_row(row)
+
+        self.assertEqual(obj.started_at, expected)
