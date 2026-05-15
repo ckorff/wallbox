@@ -149,6 +149,13 @@ KEBA_PASSWORD = env("KEBA_PASSWORD", default="")
 # Diagnostic tee: if set, every fetched CSV body is written here before parse.
 KEBA_DUMP_DIR = env("KEBA_DUMP_DIR", default="")
 
+# KEBA REST API (Phase 2.6+) — consumed by KebaApiClient.
+# Defaults are intentionally lazy; the client validates at instantiation.
+KEBA_API_URL = env("KEBA_API_URL", default="")
+KEBA_API_VERIFY_TLS = env.bool("KEBA_API_VERIFY_TLS", default=False)
+KEBA_API_USERNAME = env("KEBA_API_USERNAME", default="")
+KEBA_API_PASSWORD = env("KEBA_API_PASSWORD", default="")
+
 # Reporter and vehicle profile — printed on every monthly PDF report.
 # Required: missing values raise ImproperlyConfigured at startup so we never
 # silently render a blank field in the PDF.
