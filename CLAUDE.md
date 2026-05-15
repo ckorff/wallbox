@@ -47,24 +47,22 @@ Email delivery, scheduled imports/report generation, dashboards.
 service — see Development Environment → Deployment.)
 
 ## Hardware Setup
-- **Wallbox:** KEBA P30 x-series (LAN/WLAN, IP configured in app settings)
+- **Wallbox:** KEBA P30 x-series (LAN/WLAN, IP configured in `.env`)
 - **Vehicle:** Audi Q6 e-tron
-- **Communication:** HTTP against the wallbox web UI (stdlib `urllib`, no
-  extra library). The browser login flow is replayed:
-  1. `GET /` to receive a `PHPSESSID` cookie + CSRF token from
-     `<meta name="csrf-token">`
-  2. `POST /ajax.php` with JSON `{username, password, csrftoken}`
-  3. `GET /export.php?chargingsessions=&t=<ms>` returns the
-     semicolon-separated session CSV
-- **Why HTTP, not OCPP / UDP / Modbus:** OCPP and UDP `report 1xx` polling
-  were both tried and discarded. The CSV export wins because TCP is
-  reliable on the flaky Wi-Fi link, the wallbox itself persists session
-  history (so backend downtime cannot lose data), and we don't need to
-  detect transitions — we just diff the session list.
-- **Caveat:** the web UI has no documented API; a KEBA firmware update may
-  break the scrape. If `/export.php` ever returns HTML instead of CSV,
-  `KebaAuthError` is raised and points at credentials, but a real
-  endpoint or format change will need re-inspecting `/js/webui.js`.
+- **Communication:** documented KeMove REST API on port `:8443`,
+  HTTPS with a self-signed cert. The client is `charging/keba_api.py`;
+  JWT auth, token cache under `media/`. Full endpoint reference and
+  the 401 ladder are in `docs/keba_api.md`.
+- **Why REST, not OCPP / UDP / Modbus:** OCPP and UDP `report 1xx`
+  polling were both tried and discarded before we found the REST API.
+  The REST API wins because TCP is reliable on the flaky Wi-Fi link,
+  the wallbox itself persists session history (so backend downtime
+  cannot lose data), and we don't need to detect transitions — we
+  just diff the session list.
+- **Legacy fallback:** `charging/_legacy_keba_scrape.py` retains the
+  pre-REST web-UI scrape (replay `/ajax.php` login → `/export.php`).
+  Dormant; useful only if the REST API stops responding while the
+  wallbox web UI is still up.
 
 ## Tariff (as of May 2026)
 - **Energy price:** 38.5 ct/kWh (or whatever is currently configured)
@@ -77,7 +75,7 @@ service — see Development Environment → Deployment.)
 ## Tech Stack
 - Python 3.11, Django 5.x
 - SQLite (single-user app, nothing more is needed)
-- KEBA integration: HTTP CSV scrape via stdlib `urllib` (no third-party HTTP client)
+- KEBA integration: documented REST API on :8443, stdlib `urllib` over HTTPS (no third-party HTTP client)
 - WeasyPrint for PDF generation
 - Web serving: Gunicorn (WSGI) behind no reverse proxy — LAN-only, no HTTPS.
   WhiteNoise serves static files directly from the Gunicorn process.
@@ -261,16 +259,9 @@ imports are a Phase 3 concern.
   arrive for an already-reported month (rare, but possible if
   `keba_import` was behind), the user regenerates the report manually
   via the Reports page. Decide later whether to flag this in the UI.
-- **Automation:** `keba_import` is run manually today. Once we know how
-  often the wallbox CSV truncates, decide on a systemd timer cadence
-  (likely daily) and add retry/backoff for the flaky-WLAN case.
-- **Importer doesn't detect truncated HTTP responses:** observed on
-  2026-05-14 — flaky WLAN delivered a short CSV body, `parse_sessions_csv`
-  ingested it and two real sessions were silently lost. Hardening
-  (e.g. a row-count floor, or "newest fetched row must not predate the
-  newest DB row") is not in place yet. Until it is, use
-  `KEBA_DUMP_DIR=debug python manage.py keba_import` and diff the dump
-  against a manual UI export whenever sessions look missing.
+- **Automation:** `keba_import` is run manually today. Decide on a
+  systemd timer cadence (likely daily) and add retry/backoff for the
+  flaky-WLAN case before automating.
 
 ## What Claude Should Do
 - For new features: write the test first, then the implementation (TDD)
