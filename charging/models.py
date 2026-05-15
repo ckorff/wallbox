@@ -2,6 +2,8 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
+from charging.fields import EncryptedField
+
 
 class Tariff(models.Model):
     valid_from = models.DateField(unique=True, db_index=True)
@@ -80,3 +82,31 @@ class MonthlyReport(models.Model):
 
     def __str__(self):
         return f"Report {self.year}-{self.month:02d} (€ {self.total_amount_eur})"
+
+
+class AppSettings(models.Model):
+    """Singleton holding user-editable app settings (Phase 2.8).
+
+    Always lives at ``pk=1`` — the ``save()`` override clamps the PK so
+    nothing else can land in this table. Use ``AppSettings.current()`` to
+    fetch (creating on first call).
+    """
+    keba_api_username = models.CharField(max_length=64, blank=True, default="")
+    keba_api_password = EncryptedField(blank=True, default="")
+    report_recipient_email = models.EmailField(blank=True, default="")
+
+    class Meta:
+        verbose_name = "App settings"
+        verbose_name_plural = "App settings"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def current(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def __str__(self):
+        return "App settings"
