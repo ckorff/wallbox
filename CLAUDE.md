@@ -150,8 +150,11 @@ python manage.py test
 
 ## Data Model
 
-`ChargingSession` (Phase 1)
-- `serial`, `started_at`, `ended_at`, `energy_kwh`, `raw_row` (full CSV row as JSON)
+`ChargingSession` (Phase 1; MVA fields added in 2.7)
+- `serial`, `started_at`, `ended_at`, `energy_kwh`, `raw_row` (full source row as JSON)
+- `mva_record_data`, `mva_record_signature` (TextField, nullable) — verbatim
+  JSON strings from the wallbox's MVA-signed record; null for sessions
+  imported via the CSV path (which doesn't carry MVA data)
 - Natural key: `(serial, started_at)`
 
 `Tariff` (historical, never edited – new entries instead)

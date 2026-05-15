@@ -28,6 +28,13 @@ class ChargingSession(models.Model):
     ended_at = models.DateTimeField(null=True, blank=True)
     energy_kwh = models.DecimalField(max_digits=10, decimal_places=3)
     raw_row = models.JSONField()
+    # MVA-signed records from the wallbox (Eichrecht). Stored verbatim as
+    # JSON-encoded strings — the signature is over the original bytes, so
+    # re-parsing and re-serializing would break later verification. Null
+    # for pre-2.7 sessions imported via the CSV path (which never carried
+    # MVA data).
+    mva_record_data = models.TextField(null=True, blank=True)
+    mva_record_signature = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
