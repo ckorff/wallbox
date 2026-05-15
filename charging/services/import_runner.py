@@ -12,7 +12,8 @@ from typing import Callable
 
 from django.conf import settings
 
-from charging.keba_http import fetch_sessions_csv, parse_sessions_csv
+from charging.keba_csv import parse_sessions_csv
+from charging.keba_http import fetch_sessions_csv
 from charging.services import ingest_csv_row
 
 

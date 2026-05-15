@@ -6,11 +6,11 @@ from zoneinfo import ZoneInfo
 
 from django.test import TestCase
 
+from charging.keba_csv import parse_sessions_csv
 from charging.keba_http import (
     KebaAuthError,
     _extract_csrf_token,
     fetch_sessions_csv,
-    parse_sessions_csv,
 )
 from charging.models import ChargingSession
 from charging.services import ingest_csv_row

@@ -13,8 +13,6 @@ flow we replay mirrors what the browser does:
 """
 from __future__ import annotations
 
-import csv
-import io
 import json
 import re
 import time
@@ -85,10 +83,3 @@ def fetch_sessions_csv(
             "Export returned HTML — login probably failed (check KEBA_USERNAME/KEBA_PASSWORD)"
         )
     return body
-
-
-def parse_sessions_csv(text: str) -> list[dict[str, str]]:
-    if not text.strip():
-        return []
-    reader = csv.DictReader(io.StringIO(text), delimiter=";")
-    return [dict(row) for row in reader]
