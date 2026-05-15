@@ -409,3 +409,69 @@ class IngestJsonRowTests(TestCase):
         obj, _ = ingest_json_row(row)
 
         self.assertEqual(obj.started_at, expected)
+
+
+class WallboxKeyTests(TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.key_path = Path(self._tmp.name) / "wallbox_mva_public_key.json"
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_ensure_writes_file_then_is_idempotent(self):
+        from unittest.mock import Mock
+
+        from charging.services.wallbox_key import ensure_wallbox_key_archived
+
+        client = Mock()
+        client.get_wallbox_info.return_value = {
+            "serialNumber": "34416115",
+            "mvaPublicKey": '{"UK":"3059301306072A8648CE3D"}',
+        }
+
+        record = ensure_wallbox_key_archived(
+            client, "34416115", path=self.key_path
+        )
+
+        self.assertEqual(record["wallbox_serial"], "34416115")
+        self.assertEqual(record["public_key_hex"], "3059301306072A8648CE3D")
+        self.assertTrue(self.key_path.exists())
+        client.get_wallbox_info.assert_called_once_with("34416115")
+
+        # Second call: read from disk, no additional API hit.
+        again = ensure_wallbox_key_archived(
+            client, "34416115", path=self.key_path
+        )
+
+        self.assertEqual(again, record)
+        client.get_wallbox_info.assert_called_once()  # still 1
+
+    def test_ensure_returns_none_when_wallbox_has_no_mva_key(self):
+        from unittest.mock import Mock
+
+        from charging.services.wallbox_key import ensure_wallbox_key_archived
+
+        client = Mock()
+        client.get_wallbox_info.return_value = {"serialNumber": "34416115"}
+
+        result = ensure_wallbox_key_archived(
+            client, "34416115", path=self.key_path
+        )
+
+        self.assertIsNone(result)
+        self.assertFalse(self.key_path.exists())
+
+    def test_fingerprint_is_lowercase_64char_sha256(self):
+        import hashlib
+
+        from charging.services.wallbox_key import public_key_fingerprint
+
+        record = {"public_key_hex": "3059ABCD"}
+        expected = hashlib.sha256(b"3059ABCD").hexdigest()
+
+        result = public_key_fingerprint(record)
+
+        self.assertEqual(result, expected)
+        self.assertEqual(len(result), 64)
+        self.assertTrue(result.islower())

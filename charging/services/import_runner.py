@@ -20,6 +20,7 @@ from django.conf import settings
 from charging.keba_api import KebaApiClient
 from charging.keba_csv import parse_sessions_csv
 from charging.services import ingest_csv_row, ingest_json_row
+from charging.services.wallbox_key import ensure_wallbox_key_archived
 
 
 _BERLIN = ZoneInfo("Europe/Berlin")
@@ -93,6 +94,14 @@ def _import_from_api(say: Callable[[str], None]) -> ImportResult:
     )
     rows = client.list_sessions()
     say(f"Fetched {len(rows)} session(s)")
+
+    if rows:
+        key_path = Path(settings.MEDIA_ROOT) / "wallbox_mva_public_key.json"
+        existed = key_path.exists()
+        serial = rows[0]["wallboxSerialNumber"]
+        record = ensure_wallbox_key_archived(client, serial, path=key_path)
+        if record and not existed:
+            say(f"Wallbox MVA public key archived → {key_path}")
 
     if settings.KEBA_DUMP_DIR:
         dump_dir = Path(settings.KEBA_DUMP_DIR)
