@@ -69,12 +69,11 @@ def fetch_wallbox_status() -> dict:
 
     Combines on-disk archived data (serial + public key) with a live API
     call for firmware version and DIP-switch state. Gracefully degrades
-    when the wallbox is unreachable — the archived fields still render,
-    and a warning explains why the live fields are missing.
+    when the wallbox is unreachable or credentials are missing — the
+    archived fields still render, and a warning explains why the live
+    fields are missing.
     """
-    from django.conf import settings as django_settings
-
-    from charging.keba_api import KebaApiClient
+    from charging.services.keba_client import build_keba_client
 
     archived = load_archived_key()
     if not archived:
@@ -96,13 +95,7 @@ def fetch_wallbox_status() -> dict:
         "live_fetch_error": None,
     }
     try:
-        client = KebaApiClient(
-            base_url=django_settings.KEBA_API_URL,
-            username=django_settings.KEBA_API_USERNAME,
-            password=django_settings.KEBA_API_PASSWORD,
-            verify_tls=django_settings.KEBA_API_VERIFY_TLS,
-            token_cache_path=Path(django_settings.MEDIA_ROOT) / ".keba_token.json",
-        )
+        client = build_keba_client()
         info = client.get_wallbox_info(result["serial"])
         result["firmware_version"] = info.get("firmwareVersion")
         result["dip_switch_settings"] = info.get("dipSwitchSettings")

@@ -3,10 +3,11 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.db import connection
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from charging.models import AppSettings
+from charging.services.keba_client import build_keba_client
 
 
 User = get_user_model()
@@ -222,3 +223,61 @@ class SettingsPageTests(TestCase):
         # Warning surfaces the underlying error class/message.
         self.assertContains(response, "Wallbox unreachable")
         self.assertContains(response, "TimeoutError")
+
+
+@override_settings(
+    KEBA_API_URL="https://wb.test:8443",
+    KEBA_API_USERNAME="envuser",
+    KEBA_API_PASSWORD="envpassword",
+    KEBA_API_VERIFY_TLS=False,
+)
+class BuildKebaClientTests(TestCase):
+    """build_keba_client(): DB credentials win, .env fills in the gaps."""
+
+    def test_db_credentials_override_env_when_set(self):
+        s = AppSettings.current()
+        s.keba_api_username = "dbuser"
+        s.keba_api_password = "dbpassword"
+        s.save()
+
+        client = build_keba_client()
+
+        self.assertEqual(client.username, "dbuser")
+        self.assertEqual(client.password, "dbpassword")
+        self.assertEqual(client.base_url, "https://wb.test:8443")
+
+    def test_env_used_when_db_blank(self):
+        # AppSettings.current() creates an empty singleton; both DB fields
+        # default to "".
+        AppSettings.current()
+
+        client = build_keba_client()
+
+        self.assertEqual(client.username, "envuser")
+        self.assertEqual(client.password, "envpassword")
+
+    def test_mixed_db_username_env_password(self):
+        s = AppSettings.current()
+        s.keba_api_username = "dbuser"
+        s.keba_api_password = ""  # blank → env fallback
+        s.save()
+
+        client = build_keba_client()
+
+        self.assertEqual(client.username, "dbuser")
+        self.assertEqual(client.password, "envpassword")
+
+    @override_settings(KEBA_API_URL="")
+    def test_missing_url_raises(self):
+        AppSettings.current()
+        with self.assertRaises(RuntimeError) as cm:
+            build_keba_client()
+        self.assertIn("KEBA_API_URL", str(cm.exception))
+
+    @override_settings(KEBA_API_USERNAME="", KEBA_API_PASSWORD="")
+    def test_missing_credentials_raises_and_mentions_settings_page(self):
+        AppSettings.current()  # both DB fields blank
+        with self.assertRaises(RuntimeError) as cm:
+            build_keba_client()
+        # Error message must point the user at the settings page first.
+        self.assertIn("/settings/", str(cm.exception))

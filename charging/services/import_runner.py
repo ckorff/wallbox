@@ -17,9 +17,9 @@ from zoneinfo import ZoneInfo
 
 from django.conf import settings
 
-from charging.keba_api import KebaApiClient
 from charging.keba_csv import parse_sessions_csv
 from charging.services import ingest_csv_row, ingest_json_row
+from charging.services.keba_client import build_keba_client
 from charging.services.wallbox_key import ensure_wallbox_key_archived
 
 
@@ -75,23 +75,8 @@ def _import_from_csv_file(
 
 
 def _import_from_api(say: Callable[[str], None]) -> ImportResult:
-    if not settings.KEBA_API_URL:
-        raise RuntimeError("KEBA_API_URL is not set in .env.")
-    if not (settings.KEBA_API_USERNAME and settings.KEBA_API_PASSWORD):
-        raise RuntimeError(
-            "KEBA_API_USERNAME and KEBA_API_PASSWORD must be set in .env."
-        )
-    say(
-        f"Fetching sessions from {settings.KEBA_API_URL} "
-        f"(user={settings.KEBA_API_USERNAME})"
-    )
-    client = KebaApiClient(
-        base_url=settings.KEBA_API_URL,
-        username=settings.KEBA_API_USERNAME,
-        password=settings.KEBA_API_PASSWORD,
-        verify_tls=settings.KEBA_API_VERIFY_TLS,
-        token_cache_path=Path(settings.MEDIA_ROOT) / ".keba_token.json",
-    )
+    client = build_keba_client()
+    say(f"Fetching sessions from {client.base_url} (user={client.username})")
     rows = client.list_sessions()
     say(f"Fetched {len(rows)} session(s)")
 
