@@ -56,14 +56,22 @@ PDF footer, with a ✓ marker in a new "Signed" column for every signed
 session. ECDSA verification in-app stays out of scope — the raw
 signature data is preserved in the DB if HR ever asks.
 
-### Phase 2.8: next 🚧 – consolidate settings UI
-Expand the tariff-settings page into a general settings hub: API
-credentials, report-recipient email, and the read-only Eichrecht
-info block (wallbox serial, firmware, public-key fingerprint). Plan:
-`docs/ROADMAP.md`.
+### Phase 2.8: complete ✅ – consolidated settings UI
+Tariff settings expanded into a `/settings/` hub with four sections:
+Tariff, Wallbox API (encrypted-at-rest credentials), Report recipient
+(consumed by Phase 3), and a read-only Eichrecht info block (serial,
+public-key fingerprint, plus live-fetched firmware version and DIP
+state). API credentials live in the `AppSettings` singleton;
+`charging/services/keba_client.py` picks DB-over-`.env`, with `.env`
+retained as fallback for CLI runs that never touched the UI.
+
+### Phase 2.9: next 🚧 – dashboard live state + monthly summary
+Surface the wallbox's live state on the dashboard
+(IDLE / CHARGING / ERROR via `/v2/wallboxes/{serial}/state`) and a
+compact current-month summary. Plan: `docs/ROADMAP.md`.
 
 ### Later
-Phases 2.9, 3, 4 — see `docs/ROADMAP.md` for sequencing and content.
+Phases 3, 4 — see `docs/ROADMAP.md` for sequencing and content.
 The web UI itself already runs as a permanent systemd-managed Gunicorn
 service (see Development Environment → Deployment); scheduled imports
 and email delivery land in Phase 3.
@@ -89,6 +97,11 @@ and email delivery land in Phase 3.
   at `media/wallbox_mva_public_key.json` (serial + hex). Its SHA-256
   fingerprint is printed in every monthly PDF's footer so the employer
   can verify the signed-session data on request.
+- **API credentials:** stored in the `AppSettings` singleton row,
+  password encrypted via `charging.fields.EncryptedField` (Fernet, key
+  HKDF-derived from `SECRET_KEY`). Editable at `/settings/#wallbox-api`.
+  `.env` (`KEBA_API_USERNAME`/`PASSWORD`) is the CLI-only fallback
+  before the settings page has been filled in.
 
 ## Tariff (as of May 2026)
 - **Energy price:** 38.5 ct/kWh (or whatever is currently configured)
@@ -205,7 +218,7 @@ python manage.py test
 
 All pages share a base template `templates/base.html` with a top
 navigation bar showing: Wallbox (logo/title, links to dashboard),
-Tariff settings, Reports, Admin, Logout (right-aligned, with the
+Settings, Reports, Admin, Logout (right-aligned, with the
 current username next to it). The active page's nav link is visually
 highlighted.
 
@@ -220,7 +233,15 @@ highlighted.
        (number of newly imported sessions) or error message.
      - "Open latest report" – link to the most recent `MonthlyReport`'s
        PDF if any, else disabled with a hint.
-2. **Tariff settings** at `/settings/tariff/`
+2. **Settings** at `/settings/` — four anchored sub-sections:
+   - **Tariff** (`#tariff`): "Add new tariff" form + history table
+   - **Wallbox API** (`#wallbox-api`): username + password for the
+     REST API (encrypted via `EncryptedField`; blank-on-submit
+     preserves the stored value)
+   - **Report recipient** (`#report-recipient`): email for Phase 3
+   - **Eichrecht info** (`#eichrecht`, read-only): wallbox serial,
+     public-key fingerprint, live-fetched firmware + DIP state with
+     graceful "unreachable" fallback
 3. **Reports** at `/reports/`
 4. Plain server-rendered Django templates. No SPA, no JS framework.
    Styling: Tailwind via CDN play-mode, no build pipeline, no other
