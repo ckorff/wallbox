@@ -18,16 +18,16 @@ Both should be read at the start of any task that touches their respective scope
 ## Phase status
 
 ### Phase 1: complete ✅
-Charging sessions are reliably imported via the HTTP CSV scrape into the
-`ChargingSession` table (`python manage.py keba_import`). Raw session
-capture is a stable substrate.
+Charging sessions are reliably imported via `python manage.py keba_import`
+into the `ChargingSession` table. Raw session capture is a stable
+substrate.
 
 ### Phase 2: complete ✅
 Tariff history, monthly cost calculation, PDF generation, reports page
 and `generate_report` CLI all in place.
 
-### Phase 2.5: current 🚧 – drop base fee accounting
-Removing the pro-rated base fee mechanism entirely:
+### Phase 2.5: complete ✅ – dropped base-fee accounting
+Removed the pro-rated base fee mechanism entirely:
 - The grid base fee is a **sunk cost** the user pays regardless of
   charging at home, so charging it back to the employer would not
   reflect actual marginal cost.
@@ -37,14 +37,26 @@ Removing the pro-rated base fee mechanism entirely:
 - Reports now reflect only marginal cost: energy used at the wallbox
   multiplied by the energy price valid at session time.
 
-Affected: `Tariff.base_fee_eur_per_month`, the entire `MonthlyHouseUsage`
-feature, and the corresponding fields on `MonthlyReport`. PDF layout
-and tariff settings UI simplify accordingly.
+Removed in migration `0006`: `Tariff.base_fee_eur_per_month`, the
+`MonthlyHouseUsage` model, and the prorated-base-fee fields on
+`MonthlyReport`.
 
-### Phase 3: later
-Email delivery, scheduled imports/report generation, dashboards.
-(The web UI itself already runs as a permanent systemd-managed Gunicorn
-service — see Development Environment → Deployment.)
+### Phase 2.6: complete ✅ – REST API migration
+The legacy PHP-scrape against the wallbox web UI was replaced by the
+documented KeMove REST API on `:8443`. Client at
+`charging/keba_api.py`, full reference in `docs/keba_api.md`. The old
+scrape is preserved (dormant) as `charging/_legacy_keba_scrape.py`.
+
+### Phase 2.7: next 🚧 – Eichrechtskonformität im PDF
+Surface the MVA-signed records (already returned by the REST API) on
+the monthly PDF so the employer has cryptographic provenance for the
+charged kWh. Plan: `docs/ROADMAP.md`.
+
+### Later
+Phases 2.8, 2.9, 3, 4 — see `docs/ROADMAP.md` for sequencing and
+content. The web UI itself already runs as a permanent systemd-managed
+Gunicorn service (see Development Environment → Deployment); scheduled
+imports and email delivery land in Phase 3.
 
 ## Hardware Setup
 - **Wallbox:** KEBA P30 x-series (LAN/WLAN, IP configured in `.env`)
