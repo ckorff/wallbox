@@ -1,5 +1,6 @@
 from datetime import date
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError
@@ -85,7 +86,9 @@ class TariffForDateTests(TestCase):
 
 
 class TariffSettingsViewTests(TestCase):
-    url = "/settings/tariff/"
+    """Tariff section of the consolidated /settings/ page (Phase 2.8)."""
+
+    url = "/settings/"
 
     def setUp(self):
         self.staff_user = User.objects.create_user(
@@ -94,6 +97,18 @@ class TariffSettingsViewTests(TestCase):
         self.regular_user = User.objects.create_user(
             username="user", password="pw"
         )
+
+    def _post_tariff(self, **fields):
+        data = {"form_name": "tariff", **fields}
+        return self.client.post(self.url, data=data)
+
+    def _get_settings(self):
+        # Avoid live wallbox calls in tariff tests.
+        with patch(
+            "charging.views.fetch_wallbox_status",
+            return_value={"archived": False},
+        ):
+            return self.client.get(self.url)
 
     def test_anonymous_get_redirects_to_login(self):
         response = self.client.get(self.url)
@@ -111,7 +126,7 @@ class TariffSettingsViewTests(TestCase):
         )
 
         self.client.force_login(self.staff_user)
-        response = self.client.get(self.url)
+        response = self._get_settings()
 
         self.assertEqual(response.status_code, 200)
         tariffs = list(response.context["tariffs"])
@@ -122,22 +137,18 @@ class TariffSettingsViewTests(TestCase):
 
     def test_staff_post_creates_new_tariff_and_redirects(self):
         self.client.force_login(self.staff_user)
-        response = self.client.post(
-            self.url,
-            data={
-                "valid_from": "01.05.2026",
-                "energy_price_ct_per_kwh": "38.500",
-            },
+        response = self._post_tariff(
+            valid_from="01.05.2026",
+            energy_price_ct_per_kwh="38.500",
         )
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response["Location"], self.url)
+        self.assertEqual(response["Location"], self.url + "#tariff")
         self.assertEqual(Tariff.objects.count(), 1)
         t = Tariff.objects.get()
         self.assertEqual(t.valid_from, date(2026, 5, 1))
         self.assertEqual(t.energy_price_ct_per_kwh, Decimal("38.500"))
 
-        # Follow the redirect to confirm the success message is rendered.
-        followed = self.client.get(self.url)
+        followed = self._get_settings()
         self.assertEqual(followed.status_code, 200)
         messages = [m.message for m in followed.context["messages"]]
         self.assertTrue(messages, "expected at least one Django message")
@@ -152,30 +163,32 @@ class TariffSettingsViewTests(TestCase):
             energy_price_ct_per_kwh=Decimal("38.500"),
         )
         self.client.force_login(self.staff_user)
-        response = self.client.post(
-            self.url,
-            data={
-                "valid_from": "01.05.2026",
-                "energy_price_ct_per_kwh": "40.000",
-            },
-        )
+        with patch(
+            "charging.views.fetch_wallbox_status",
+            return_value={"archived": False},
+        ):
+            response = self._post_tariff(
+                valid_from="01.05.2026",
+                energy_price_ct_per_kwh="40.000",
+            )
         self.assertEqual(response.status_code, 200)
-        form = response.context["form"]
+        form = response.context["tariff_form"]
         self.assertFalse(form.is_valid())
         self.assertIn("valid_from", form.errors)
         self.assertEqual(Tariff.objects.count(), 1)
 
     def test_staff_post_with_negative_energy_price_rerenders_with_field_error(self):
         self.client.force_login(self.staff_user)
-        response = self.client.post(
-            self.url,
-            data={
-                "valid_from": "01.05.2026",
-                "energy_price_ct_per_kwh": "-1.000",
-            },
-        )
+        with patch(
+            "charging.views.fetch_wallbox_status",
+            return_value={"archived": False},
+        ):
+            response = self._post_tariff(
+                valid_from="01.05.2026",
+                energy_price_ct_per_kwh="-1.000",
+            )
         self.assertEqual(response.status_code, 200)
-        form = response.context["form"]
+        form = response.context["tariff_form"]
         self.assertFalse(form.is_valid())
         self.assertIn("energy_price_ct_per_kwh", form.errors)
         self.assertEqual(Tariff.objects.count(), 0)

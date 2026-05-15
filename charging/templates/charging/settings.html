@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block title %}Settings{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-medium mb-4">Settings</h1>
+
+<nav class="mb-10 text-sm text-text-secondary flex flex-wrap gap-x-5 gap-y-2">
+  <a href="#tariff" class="hover:text-accent">Tariff</a>
+  <a href="#wallbox-api" class="hover:text-accent">Wallbox API</a>
+  <a href="#report-recipient" class="hover:text-accent">Report recipient</a>
+  <a href="#eichrecht" class="hover:text-accent">Eichrecht info</a>
+</nav>
+
+{# -------- Tariff -------- #}
+<section id="tariff" class="mb-12 scroll-mt-24">
+  <div class="uppercase tracking-[0.14em] text-text-muted text-xs font-medium mb-3">
+    Tariff
+  </div>
+
+  <div class="bg-card border border-[rgba(94,234,255,0.10)] rounded-card p-6 mb-4">
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+      <input type="hidden" name="form_name" value="tariff">
+      {% for field in tariff_form %}
+        <div class="flex flex-col gap-1 max-w-md">
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}
+            <span class="text-xs text-text-muted">{{ field.help_text }}</span>
+          {% endif %}
+          {{ field.errors }}
+        </div>
+      {% endfor %}
+      <div>
+        <button type="submit"
+                class="inline-flex items-center gap-2 bg-accent hover:bg-accent-hover text-bg font-medium px-4 py-2 rounded-btn transition-colors cursor-pointer">
+          <i class="ti ti-device-floppy"></i>
+          <span>Add tariff</span>
+        </button>
+      </div>
+    </form>
+  </div>
+
+  {% if tariffs %}
+    <div class="bg-card border border-[rgba(94,234,255,0.10)] rounded-card overflow-hidden">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-text-muted uppercase tracking-[0.14em] text-[11px] font-medium">
+            <th class="text-left px-5 py-3">Valid from</th>
+            <th class="text-right px-5 py-3">Energy price (ct/kWh)</th>
+            <th class="text-left px-5 py-3">State</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in tariffs %}
+            <tr class="border-t border-[rgba(94,234,255,0.08)] hover:bg-row-hover transition-colors
+                       {% if active_tariff and t.pk == active_tariff.pk %}bg-row-hover{% endif %}">
+              <td class="px-5 py-3 text-text-primary">{{ t.valid_from|date:"d.m.Y" }}</td>
+              <td class="px-5 py-3 text-right text-text-primary tabular-nums">
+                {{ t.energy_price_ct_per_kwh }}
+              </td>
+              <td class="px-5 py-3">
+                {% if active_tariff and t.pk == active_tariff.pk %}
+                  <span class="inline-flex items-center gap-1 text-accent text-xs uppercase tracking-[0.14em] font-medium">
+                    <i class="ti ti-circle-check-filled"></i>
+                    <span>Active</span>
+                  </span>
+                {% else %}
+                  <span class="text-text-muted">&mdash;</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="bg-card border border-[rgba(94,234,255,0.10)] rounded-card p-6 text-center text-text-secondary">
+      No tariffs recorded yet.
+    </div>
+  {% endif %}
+</section>
+
+{# -------- Wallbox API -------- #}
+<section id="wallbox-api" class="mb-12 scroll-mt-24">
+  <div class="uppercase tracking-[0.14em] text-text-muted text-xs font-medium mb-3">
+    Wallbox API credentials
+  </div>
+
+  <div class="bg-card border border-[rgba(94,234,255,0.10)] rounded-card p-6">
+    <p class="text-text-muted text-sm mb-4">
+      Host URL stays in <code class="text-text-secondary">.env</code> (infrastructure).
+      DB values override <code class="text-text-secondary">.env</code> when set.
+    </p>
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+      <input type="hidden" name="form_name" value="wallbox_api">
+      {% for field in wallbox_form %}
+        <div class="flex flex-col gap-1 max-w-md">
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}
+            <span class="text-xs text-text-muted">{{ field.help_text }}</span>
+          {% endif %}
+          {{ field.errors }}
+        </div>
+      {% endfor %}
+      <div>
+        <button type="submit"
+                class="inline-flex items-center gap-2 bg-accent hover:bg-accent-hover text-bg font-medium px-4 py-2 rounded-btn transition-colors cursor-pointer">
+          <i class="ti ti-device-floppy"></i>
+          <span>Save credentials</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</section>
+
+{# -------- Report recipient -------- #}
+<section id="report-recipient" class="mb-12 scroll-mt-24">
+  <div class="uppercase tracking-[0.14em] text-text-muted text-xs font-medium mb-3">
+    Report recipient
+  </div>
+
+  <div class="bg-card border border-[rgba(94,234,255,0.10)] rounded-card p-6">
+    <p class="text-text-muted text-sm mb-4">
+      Email address that will receive the monthly PDF report (used in Phase 3).
+    </p>
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+      <input type="hidden" name="form_name" value="report_recipient">
+      {% for field in recipient_form %}
+        <div class="flex flex-col gap-1 max-w-md">
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}
+            <span class="text-xs text-text-muted">{{ field.help_text }}</span>
+          {% endif %}
+          {{ field.errors }}
+        </div>
+      {% endfor %}
+      <div>
+        <button type="submit"
+                class="inline-flex items-center gap-2 bg-accent hover:bg-accent-hover text-bg font-medium px-4 py-2 rounded-btn transition-colors cursor-pointer">
+          <i class="ti ti-device-floppy"></i>
+          <span>Save recipient</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</section>
+
+{# -------- Eichrecht info -------- #}
+<section id="eichrecht" class="scroll-mt-24">
+  <div class="uppercase tracking-[0.14em] text-text-muted text-xs font-medium mb-3">
+    Eichrecht info
+  </div>
+
+  <div class="bg-card border border-[rgba(94,234,255,0.10)] rounded-card p-6">
+    {% if eichrecht.archived %}
+      <dl class="space-y-3 text-sm">
+        <div class="flex gap-4">
+          <dt class="w-44 text-text-muted shrink-0">Wallbox serial</dt>
+          <dd class="text-text-primary font-mono">{{ eichrecht.serial }}</dd>
+        </div>
+        <div class="flex gap-4">
+          <dt class="w-44 text-text-muted shrink-0">Public key fingerprint</dt>
+          <dd class="text-text-primary font-mono break-all">{{ eichrecht.fingerprint }}</dd>
+        </div>
+        <div class="flex gap-4">
+          <dt class="w-44 text-text-muted shrink-0">Firmware version</dt>
+          <dd class="text-text-primary font-mono">
+            {% if eichrecht.firmware_version %}{{ eichrecht.firmware_version }}{% else %}<span class="text-text-muted">—</span>{% endif %}
+          </dd>
+        </div>
+        <div class="flex gap-4">
+          <dt class="w-44 text-text-muted shrink-0">DIP switches</dt>
+          <dd class="text-text-primary font-mono break-all">
+            {% if eichrecht.dip_switch_settings is not None %}{{ eichrecht.dip_switch_settings }}{% else %}<span class="text-text-muted">—</span>{% endif %}
+          </dd>
+        </div>
+      </dl>
+      {% if eichrecht.live_fetch_error %}
+        <p class="text-amber-300 text-sm mt-4 flex items-start gap-2">
+          <i class="ti ti-alert-triangle mt-0.5"></i>
+          <span>Wallbox unreachable — showing archived data only ({{ eichrecht.live_fetch_error }})</span>
+        </p>
+      {% endif %}
+    {% else %}
+      <p class="text-text-secondary">
+        No public key archived yet — run an import first to fetch and persist it.
+      </p>
+    {% endif %}
+  </div>
+</section>
+
+{% if section %}
+  <script>window.location.hash = "{{ section }}";</script>
+{% endif %}
+{% endblock %}

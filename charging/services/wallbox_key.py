@@ -62,3 +62,50 @@ def load_archived_key(*, path: Path | None = None) -> dict | None:
     if not path.exists():
         return None
     return json.loads(path.read_text())
+
+
+def fetch_wallbox_status() -> dict:
+    """Build the display dict for the Settings page's Eichrecht block.
+
+    Combines on-disk archived data (serial + public key) with a live API
+    call for firmware version and DIP-switch state. Gracefully degrades
+    when the wallbox is unreachable — the archived fields still render,
+    and a warning explains why the live fields are missing.
+    """
+    from django.conf import settings as django_settings
+
+    from charging.keba_api import KebaApiClient
+
+    archived = load_archived_key()
+    if not archived:
+        return {
+            "archived": False,
+            "serial": None,
+            "fingerprint": None,
+            "firmware_version": None,
+            "dip_switch_settings": None,
+            "live_fetch_error": None,
+        }
+
+    result = {
+        "archived": True,
+        "serial": archived["wallbox_serial"],
+        "fingerprint": public_key_fingerprint(archived),
+        "firmware_version": None,
+        "dip_switch_settings": None,
+        "live_fetch_error": None,
+    }
+    try:
+        client = KebaApiClient(
+            base_url=django_settings.KEBA_API_URL,
+            username=django_settings.KEBA_API_USERNAME,
+            password=django_settings.KEBA_API_PASSWORD,
+            verify_tls=django_settings.KEBA_API_VERIFY_TLS,
+            token_cache_path=Path(django_settings.MEDIA_ROOT) / ".keba_token.json",
+        )
+        info = client.get_wallbox_info(result["serial"])
+        result["firmware_version"] = info.get("firmwareVersion")
+        result["dip_switch_settings"] = info.get("dipSwitchSettings")
+    except Exception as exc:
+        result["live_fetch_error"] = f"{type(exc).__name__}: {exc}"
+    return result

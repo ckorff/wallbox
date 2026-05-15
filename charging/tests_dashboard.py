@@ -175,8 +175,8 @@ class DashboardRunImportTests(TestCase):
 
 
 class BaseTemplateMigrationTests(TestCase):
-    """Smoke tests proving /reports/ and /settings/tariff/ still render
-    after switching to the shared base template."""
+    """Smoke tests proving /reports/ and /settings/ render via the shared
+    base template with the expected nav links."""
 
     def setUp(self):
         self.client.force_login(_staff_user())
@@ -191,11 +191,15 @@ class BaseTemplateMigrationTests(TestCase):
         # Nav links from the base template
         self.assertContains(response, 'href="/dashboard/"')
         self.assertContains(response, 'href="/reports/"')
-        self.assertContains(response, 'href="/settings/tariff/"')
+        self.assertContains(response, 'href="/settings/"')
 
-    def test_tariff_page_renders_with_nav(self):
-        response = self.client.get(reverse("tariff_settings"))
+    def test_settings_page_renders_with_nav(self):
+        with patch(
+            "charging.views.fetch_wallbox_status",
+            return_value={"archived": False},
+        ):
+            response = self.client.get(reverse("settings_page"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'href="/dashboard/"')
         self.assertContains(response, 'href="/reports/"')
-        self.assertContains(response, 'href="/settings/tariff/"')
+        self.assertContains(response, 'href="/settings/"')

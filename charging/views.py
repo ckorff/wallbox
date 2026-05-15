@@ -10,11 +10,12 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
-from .forms import TariffForm
-from .models import ChargingSession, MonthlyReport, Tariff
+from .forms import ReportRecipientForm, TariffForm, WallboxApiForm
+from .models import AppSettings, ChargingSession, MonthlyReport, Tariff
 from .services.import_runner import run_keba_import
 from .services.pdf import attach_pdf_to_report
 from .services.reports import MissingTariffError, generate_monthly_report
+from .services.wallbox_key import fetch_wallbox_status
 
 
 BERLIN = ZoneInfo("Europe/Berlin")
@@ -68,25 +69,50 @@ def dashboard(request):
 
 
 @staff_member_required
-def tariff_settings(request):
+def settings_page(request):
+    tariff_form = TariffForm()
+    wallbox_form = WallboxApiForm()
+    recipient_form = ReportRecipientForm()
+    section = ""
+
     if request.method == "POST":
-        form = TariffForm(request.POST)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "New tariff saved.")
-            return redirect(reverse("tariff_settings"))
-    else:
-        form = TariffForm()
+        which = request.POST.get("form_name")
+        if which == "tariff":
+            tariff_form = TariffForm(request.POST)
+            section = "tariff"
+            if tariff_form.is_valid():
+                tariff_form.save()
+                messages.success(request, "New tariff saved.")
+                return redirect(reverse("settings_page") + "#tariff")
+        elif which == "wallbox_api":
+            wallbox_form = WallboxApiForm(request.POST)
+            section = "wallbox-api"
+            if wallbox_form.is_valid():
+                wallbox_form.save()
+                messages.success(request, "Wallbox API credentials saved.")
+                return redirect(reverse("settings_page") + "#wallbox-api")
+        elif which == "report_recipient":
+            recipient_form = ReportRecipientForm(request.POST)
+            section = "report-recipient"
+            if recipient_form.is_valid():
+                recipient_form.save()
+                messages.success(request, "Report recipient saved.")
+                return redirect(reverse("settings_page") + "#report-recipient")
 
     tariffs = Tariff.objects.all()
     active_tariff = Tariff.for_date(timezone.localdate())
+    eichrecht = fetch_wallbox_status()
     return render(
         request,
-        "charging/tariff_settings.html",
+        "charging/settings.html",
         {
-            "form": form,
+            "tariff_form": tariff_form,
+            "wallbox_form": wallbox_form,
+            "recipient_form": recipient_form,
             "tariffs": tariffs,
             "active_tariff": active_tariff,
+            "eichrecht": eichrecht,
+            "section": section,
         },
     )
 
