@@ -17,20 +17,14 @@ class Command(BaseCommand):
         parser.add_argument(
             "--file",
             type=Path,
-            help="Read CSV from a local file instead of fetching over HTTP.",
-        )
-        parser.add_argument(
-            "--host",
-            help="Override settings.KEBA_HOST (HTTP fetch only).",
+            help="Read CSV from a local file instead of fetching over the API.",
         )
 
     def handle(self, *args, **options):
         verbosity = options.get("verbosity", 1)
         log = self.stdout.write if verbosity >= 2 else None
         try:
-            result = run_keba_import(
-                file=options["file"], host=options["host"], log=log
-            )
+            result = run_keba_import(file=options["file"], log=log)
         except RuntimeError as exc:
             raise CommandError(str(exc))
 

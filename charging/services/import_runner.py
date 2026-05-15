@@ -1,19 +1,20 @@
 """Service entry point for KEBA CSV imports.
 
-Wraps the HTTP fetch + CSV parse + per-row ingest pipeline so it can be
-called from both the ``keba_import`` management command and the
+Wraps the REST-API fetch + CSV parse + per-row ingest pipeline so it can
+be called from both the ``keba_import`` management command and the
 dashboard "Run import now" button without duplicating logic.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
 from django.conf import settings
 
+from charging.keba_api import KebaApiClient
 from charging.keba_csv import parse_sessions_csv
-from charging.keba_http import fetch_sessions_csv
 from charging.services import ingest_csv_row
 
 
@@ -29,12 +30,11 @@ class ImportResult:
 def run_keba_import(
     *,
     file: Path | None = None,
-    host: str | None = None,
     log: Callable[[str], None] | None = None,
 ) -> ImportResult:
     """Fetch the wallbox CSV (or read from ``file``) and upsert sessions.
 
-    Exceptions from the HTTP layer or parsing propagate to the caller –
+    Exceptions from the API client or parsing propagate to the caller –
     the management command turns them into ``CommandError``, the
     dashboard view catches them for a flash message.
 
@@ -46,22 +46,32 @@ def run_keba_import(
         say(f"Reading CSV from file: {file}")
         text = file.read_text(encoding="utf-8")
     else:
-        host = host or settings.KEBA_HOST
-        if not host:
-            raise RuntimeError("KEBA_HOST is not set in .env (or pass --host).")
-        if not (settings.KEBA_USERNAME and settings.KEBA_PASSWORD):
+        if not settings.KEBA_API_URL:
+            raise RuntimeError("KEBA_API_URL is not set in .env.")
+        if not (settings.KEBA_API_USERNAME and settings.KEBA_API_PASSWORD):
             raise RuntimeError(
-                "KEBA_USERNAME and KEBA_PASSWORD must be set in .env."
+                "KEBA_API_USERNAME and KEBA_API_PASSWORD must be set in .env."
             )
-        say(f"Fetching CSV from http://{host} (user={settings.KEBA_USERNAME})")
-        if settings.KEBA_DUMP_DIR:
-            say(f"Dumping raw body to {settings.KEBA_DUMP_DIR}/")
-        text = fetch_sessions_csv(
-            host,
-            settings.KEBA_USERNAME,
-            settings.KEBA_PASSWORD,
-            dump_dir=settings.KEBA_DUMP_DIR or None,
+        say(
+            f"Fetching CSV from {settings.KEBA_API_URL} "
+            f"(user={settings.KEBA_API_USERNAME})"
         )
+        client = KebaApiClient(
+            base_url=settings.KEBA_API_URL,
+            username=settings.KEBA_API_USERNAME,
+            password=settings.KEBA_API_PASSWORD,
+            verify_tls=settings.KEBA_API_VERIFY_TLS,
+            token_cache_path=Path(settings.MEDIA_ROOT) / ".keba_token.json",
+        )
+        body = client.export_sessions_csv()
+        if settings.KEBA_DUMP_DIR:
+            dump_dir = Path(settings.KEBA_DUMP_DIR)
+            dump_dir.mkdir(parents=True, exist_ok=True)
+            stamp = datetime.now().strftime("%Y%m%dT%H%M%S")
+            dest = dump_dir / f"keba_export_{stamp}.csv"
+            dest.write_bytes(body)
+            say(f"Dumped raw body to {dest}")
+        text = body.decode("utf-8")
         say(f"Fetched {len(text)} bytes")
 
     rows = parse_sessions_csv(text)
