@@ -50,3 +50,15 @@ def ensure_wallbox_key_archived(
 def public_key_fingerprint(record: dict) -> str:
     """SHA-256 hex digest (64 chars, lowercase) of the public-key hex string."""
     return hashlib.sha256(record["public_key_hex"].encode("utf-8")).hexdigest()
+
+
+def load_archived_key(*, path: Path | None = None) -> dict | None:
+    """Return the archived wallbox key record, or None if not yet archived.
+
+    Read by PDF rendering so the footer can quote the serial and
+    fingerprint without re-hitting the wallbox.
+    """
+    path = path or _default_path()
+    if not path.exists():
+        return None
+    return json.loads(path.read_text())

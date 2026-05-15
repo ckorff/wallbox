@@ -11,6 +11,10 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 
 from charging.models import ChargingSession, MonthlyReport, Tariff
+from charging.services.wallbox_key import (
+    load_archived_key,
+    public_key_fingerprint,
+)
 
 
 BERLIN = ZoneInfo("Europe/Berlin")
@@ -76,9 +80,11 @@ def build_report_context(report: MonthlyReport) -> dict:
                 "energy_kwh": session.energy_kwh,
                 "tariff_ct_per_kwh": tariff_ct,
                 "line_cost_eur": line_cost,
+                "signed": session.mva_record_signature is not None,
             }
         )
 
+    key_record = load_archived_key()
     return {
         "report": report,
         "year": year,
@@ -94,6 +100,10 @@ def build_report_context(report: MonthlyReport) -> dict:
         "session_rows": rows,
         "session_kwh_total": report.wallbox_kwh_total,
         "session_cost_total": report.energy_cost_eur,
+        "wallbox_serial": key_record["wallbox_serial"] if key_record else None,
+        "public_key_fingerprint": (
+            public_key_fingerprint(key_record) if key_record else None
+        ),
     }
 
 

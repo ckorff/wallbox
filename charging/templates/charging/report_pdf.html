@@ -123,6 +123,27 @@
     table.sessions tfoot td.num {
       text-align: right;
     }
+    table.sessions th.signed,
+    table.sessions td.signed {
+      text-align: center;
+      width: 4em;
+    }
+
+    .eichrecht-footer {
+      margin-top: 2em;
+      padding-top: 0.8em;
+      border-top: 1pt solid var(--color-rule);
+      font-size: 8.5pt;
+      color: var(--color-muted);
+    }
+    .eichrecht-footer p {
+      margin: 0.25em 0;
+    }
+    .eichrecht-footer code {
+      font-family: "DejaVu Sans Mono", "Liberation Mono", monospace;
+      font-size: 8pt;
+      word-break: break-all;
+    }
 
     .summary {
       page-break-inside: avoid;
@@ -185,6 +206,7 @@
           <th class="num">kWh</th>
           <th class="num">Tariff (ct/kWh)</th>
           <th class="num">Line cost (€)</th>
+          <th class="signed">Signed</th>
         </tr>
       </thead>
       <tbody>
@@ -196,6 +218,7 @@
             <td class="num">{{ row.energy_kwh }}</td>
             <td class="num">{{ row.tariff_ct_per_kwh }}</td>
             <td class="num">{{ row.line_cost_eur }}</td>
+            <td class="signed">{% if row.signed %}✓{% endif %}</td>
           </tr>
         {% endfor %}
       </tbody>
@@ -205,6 +228,7 @@
           <td class="num">{{ session_kwh_total }}</td>
           <td class="num"></td>
           <td class="num">{{ session_cost_total }}</td>
+          <td class="signed"></td>
         </tr>
       </tfoot>
     </table>
@@ -226,6 +250,14 @@
       <span>€ {{ report.total_amount_eur }}</span>
     </div>
   </div>
+
+  {% if wallbox_serial and public_key_fingerprint %}
+    <div class="eichrecht-footer">
+      <p>Charging session data is signed by the KEBA KeContact P30 wallbox (MVA, Eichrecht-compliant).</p>
+      <p>Wallbox serial: <code>{{ wallbox_serial }}</code>. Public key fingerprint: <code>{{ public_key_fingerprint }}</code>.</p>
+      <p>Original signed records available on request.</p>
+    </div>
+  {% endif %}
 
 </body>
 </html>

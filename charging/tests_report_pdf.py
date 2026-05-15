@@ -1,4 +1,6 @@
 """Tests for PDF rendering of MonthlyReport rows (Phase 2.4)."""
+import hashlib
+import json
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -199,3 +201,87 @@ class AttachPdfToReportTests(TestCase):
 
         self.assertEqual(result.pk, report.pk)
         self.assertTrue(bool(result.pdf))
+
+
+@override_settings(
+    MEDIA_ROOT=str(Path("/tmp/wallbox-test-media-eichrecht")),
+    **REPORTER_OVERRIDES,
+)
+class EichrechtPdfTests(TestCase):
+    """Phase 2.7: Signed column + Eichrecht footer."""
+
+    def setUp(self):
+        self.media = Path("/tmp/wallbox-test-media-eichrecht")
+        self.media.mkdir(parents=True, exist_ok=True)
+        # Start each test from a known no-key state.
+        key_file = self.media / "wallbox_mva_public_key.json"
+        if key_file.exists():
+            key_file.unlink()
+
+    def _seed_signed_and_unsigned(self):
+        Tariff.objects.create(
+            valid_from=date(2026, 1, 1),
+            energy_price_ct_per_kwh=Decimal("38.500"),
+        )
+        ChargingSession.objects.create(
+            serial="34416115",
+            started_at=_dt(2026, 5, 5, 9, 30),
+            ended_at=_dt(2026, 5, 5, 10, 30),
+            energy_kwh=Decimal("4.000"),
+            raw_row={},
+            mva_record_data='{"FV":"1.1"}',
+            mva_record_signature='{"SD":"3046..."}',
+        )
+        ChargingSession.objects.create(
+            serial="34416115",
+            started_at=_dt(2026, 5, 17, 19, 15),
+            ended_at=_dt(2026, 5, 17, 20, 30),
+            energy_kwh=Decimal("6.500"),
+            raw_row={},
+            # No MVA records (e.g., CSV-imported before Phase 2.7)
+        )
+        return generate_monthly_report(2026, 5)
+
+    def _archive_test_key(self, hex_key="3059ABCD"):
+        (self.media / "wallbox_mva_public_key.json").write_text(
+            json.dumps(
+                {"wallbox_serial": "34416115", "public_key_hex": hex_key}
+            )
+        )
+
+    def _render_html(self, report):
+        return render_to_string(
+            "charging/report_pdf.html", build_report_context(report)
+        )
+
+    def test_html_includes_signed_column_header(self):
+        report = self._seed_signed_and_unsigned()
+        html = self._render_html(report)
+
+        self.assertIn("Signed", html)
+
+    def test_html_marks_signed_session_and_leaves_unsigned_blank(self):
+        report = self._seed_signed_and_unsigned()
+        html = self._render_html(report)
+
+        # Exactly one ✓ for the one session with mva_record_signature set.
+        self.assertEqual(html.count("✓"), 1)
+
+    def test_html_includes_eichrecht_footer_when_key_archived(self):
+        self._archive_test_key("3059ABCD")
+        report = self._seed_signed_and_unsigned()
+        html = self._render_html(report)
+
+        self.assertIn("Eichrecht", html)
+        self.assertIn("34416115", html)
+        expected_fp = hashlib.sha256(b"3059ABCD").hexdigest()
+        self.assertIn(expected_fp, html)
+
+    def test_html_omits_eichrecht_footer_when_key_missing(self):
+        # No _archive_test_key call — file absent.
+        report = self._seed_signed_and_unsigned()
+        html = self._render_html(report)
+
+        # Footer block (which is the only place "Eichrecht" appears)
+        # must not render without an archived key.
+        self.assertNotIn("Eichrecht", html)
