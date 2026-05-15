@@ -47,16 +47,26 @@ documented KeMove REST API on `:8443`. Client at
 `charging/keba_api.py`, full reference in `docs/keba_api.md`. The old
 scrape is preserved (dormant) as `charging/_legacy_keba_scrape.py`.
 
-### Phase 2.7: next 🚧 – Eichrechtskonformität im PDF
-Surface the MVA-signed records (already returned by the REST API) on
-the monthly PDF so the employer has cryptographic provenance for the
-charged kWh. Plan: `docs/ROADMAP.md`.
+### Phase 2.7: complete ✅ – Eichrechtskonformität im PDF
+MVA-signed records (`mva_record_data`, `mva_record_signature`) flow
+from `/v2/sessions` into the DB via `ingest_json_row`. The wallbox's
+MVA public key is archived once at `media/wallbox_mva_public_key.json`;
+its SHA-256 fingerprint and the wallbox serial appear in the monthly
+PDF footer, with a ✓ marker in a new "Signed" column for every signed
+session. ECDSA verification in-app stays out of scope — the raw
+signature data is preserved in the DB if HR ever asks.
+
+### Phase 2.8: next 🚧 – consolidate settings UI
+Expand the tariff-settings page into a general settings hub: API
+credentials, report-recipient email, and the read-only Eichrecht
+info block (wallbox serial, firmware, public-key fingerprint). Plan:
+`docs/ROADMAP.md`.
 
 ### Later
-Phases 2.8, 2.9, 3, 4 — see `docs/ROADMAP.md` for sequencing and
-content. The web UI itself already runs as a permanent systemd-managed
-Gunicorn service (see Development Environment → Deployment); scheduled
-imports and email delivery land in Phase 3.
+Phases 2.9, 3, 4 — see `docs/ROADMAP.md` for sequencing and content.
+The web UI itself already runs as a permanent systemd-managed Gunicorn
+service (see Development Environment → Deployment); scheduled imports
+and email delivery land in Phase 3.
 
 ## Hardware Setup
 - **Wallbox:** KEBA P30 x-series (LAN/WLAN, IP configured in `.env`)
@@ -75,6 +85,10 @@ imports and email delivery land in Phase 3.
   pre-REST web-UI scrape (replay `/ajax.php` login → `/export.php`).
   Dormant; useful only if the REST API stops responding while the
   wallbox web UI is still up.
+- **Eichrecht artifact:** the wallbox's MVA public key is archived once
+  at `media/wallbox_mva_public_key.json` (serial + hex). Its SHA-256
+  fingerprint is printed in every monthly PDF's footer so the employer
+  can verify the signed-session data on request.
 
 ## Tariff (as of May 2026)
 - **Energy price:** 38.5 ct/kWh (or whatever is currently configured)
