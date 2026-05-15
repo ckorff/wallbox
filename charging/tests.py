@@ -12,15 +12,10 @@ from django.test import TestCase
 
 from charging.keba_api import (
     KebaApiClient,
+    KebaAuthError,
     KebaTruncatedError,
 )
-from charging.keba_api import KebaAuthError as ApiAuthError
 from charging.keba_csv import parse_sessions_csv
-from charging.keba_http import (
-    KebaAuthError,
-    _extract_csrf_token,
-    fetch_sessions_csv,
-)
 from charging.models import ChargingSession
 from charging.services import ingest_csv_row
 
@@ -34,70 +29,6 @@ SAMPLE_CSV = (
     "07-05-2026 15:32:14;34;154.9;154.9;0\r\n"
 )
 BERLIN = ZoneInfo("Europe/Berlin")
-
-
-LOGIN_HTML = (
-    '<html><head>'
-    '<meta name="csrf-token" content="abc123def456">'
-    '</head><body>Login</body></html>'
-)
-
-
-class ExtractCsrfTokenTests(TestCase):
-    def test_extracts_token_from_meta(self):
-        self.assertEqual(_extract_csrf_token(LOGIN_HTML), "abc123def456")
-
-    def test_raises_when_token_missing(self):
-        with self.assertRaises(KebaAuthError):
-            _extract_csrf_token("<html><body>no token here</body></html>")
-
-
-class FetchSessionsCsvTests(TestCase):
-    @patch("charging.keba_http._open")
-    def test_full_login_flow_fetches_csv(self, mock_open):
-        mock_open.side_effect = [LOGIN_HTML, '{"status":"ok"}', SAMPLE_CSV]
-
-        body = fetch_sessions_csv("192.0.2.10", "user", "pw")
-
-        self.assertEqual(body, SAMPLE_CSV)
-        calls = mock_open.call_args_list
-        self.assertEqual(len(calls), 3)
-        # 1) GET /
-        self.assertEqual(calls[0].args[1], "http://192.0.2.10/")
-        # 2) POST /ajax.php with JSON containing the CSRF token from step 1
-        self.assertEqual(calls[1].args[1], "http://192.0.2.10/ajax.php")
-        login_payload = json.loads(calls[1].kwargs["data"].decode("utf-8"))
-        self.assertEqual(
-            login_payload,
-            {"username": "user", "password": "pw", "csrftoken": "abc123def456"},
-        )
-        # 3) GET /export.php with cache buster
-        export_url = calls[2].args[1]
-        self.assertTrue(
-            export_url.startswith("http://192.0.2.10/export.php?chargingsessions=&t=")
-        )
-        cache_buster = export_url.rsplit("=", 1)[1]
-        self.assertTrue(cache_buster.isdigit() and int(cache_buster) > 0)
-
-    @patch("charging.keba_http._open")
-    def test_passes_timeout_to_every_request(self, mock_open):
-        mock_open.side_effect = [LOGIN_HTML, "{}", SAMPLE_CSV]
-
-        fetch_sessions_csv("192.0.2.10", "u", "p", timeout=7.5)
-
-        for call in mock_open.call_args_list:
-            self.assertEqual(call.kwargs["timeout"], 7.5)
-
-    @patch("charging.keba_http._open")
-    def test_raises_when_export_returns_html(self, mock_open):
-        mock_open.side_effect = [
-            LOGIN_HTML,
-            "{}",
-            "<!DOCTYPE html><html>Login</html>",
-        ]
-
-        with self.assertRaises(KebaAuthError):
-            fetch_sessions_csv("192.0.2.10", "wrong", "creds")
 
 
 class ParseSessionsCsvTests(TestCase):
@@ -306,7 +237,7 @@ class KebaApiClientTests(TestCase):
         ]
 
         client = self._client()
-        with self.assertRaises(ApiAuthError):
+        with self.assertRaises(KebaAuthError):
             client.get_state("34416115")
 
     @patch("charging.keba_api.KebaApiClient._request")
