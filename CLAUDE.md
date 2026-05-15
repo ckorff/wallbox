@@ -8,6 +8,13 @@ to the user's employer. Vehicle: Audi Q6 e-tron (company car).
 The employer is international: **all UI, PDF reports and emails are in
 English**. Internal notes and this file may stay in English for consistency.
 
+## Companion docs
+
+- `docs/ROADMAP.md` – upcoming phases and their concrete deliverables
+- `docs/keba_api.md` – reference for the KEBA KeMove REST API on port 8443
+
+Both should be read at the start of any task that touches their respective scope.
+
 ## Phase status
 
 ### Phase 1: complete ✅
