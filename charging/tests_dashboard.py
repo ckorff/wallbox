@@ -100,11 +100,22 @@ class DashboardRunImportTests(TestCase):
         self.client.force_login(_staff_user())
 
     def test_post_run_import_success_message_redirects(self):
+        # Seed one existing session so "already known" and "total now" are
+        # not trivially zero.
+        _session(datetime(2026, 5, 1, 10, 0, tzinfo=BERLIN), "4.000")
+
+        def _fake_import(*, log=None):
+            # Simulate the side effect of a real import: insert one new row.
+            _session(datetime(2026, 5, 8, 11, 0, tzinfo=BERLIN), "2.500")
+            return ImportResult(
+                sessions_imported=1,
+                sessions_updated=1,
+                sessions_skipped=0,
+                rows_seen=2,
+            )
+
         with patch(
-            "charging.views.run_keba_import",
-            return_value=ImportResult(
-                sessions_imported=3, sessions_skipped=2, sessions_updated=0
-            ),
+            "charging.views.run_keba_import", side_effect=_fake_import
         ) as runner:
             response = self.client.post(
                 reverse("dashboard"),
@@ -117,10 +128,10 @@ class DashboardRunImportTests(TestCase):
 
         followed = self.client.get(reverse("dashboard"))
         msgs = [str(m) for m in followed.context["messages"]]
-        self.assertTrue(
-            any("3" in m for m in msgs),
-            f"Expected success message containing '3', got {msgs!r}",
-        )
+        joined = " ".join(msgs)
+        self.assertIn("Import finished: 1 new", joined)
+        self.assertIn("1 already known", joined)
+        self.assertIn("total now 2 sessions", joined)
 
     def test_post_run_import_renders_per_row_log_block(self):
         def _fake_import(*, log):

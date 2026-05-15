@@ -36,11 +36,12 @@ def dashboard(request):
             if log_lines:
                 messages.info(request, "\n".join(log_lines), extra_tags="log")
         else:
+            total_now = ChargingSession.objects.count()
             messages.success(
                 request,
-                f"Import finished: {result.sessions_imported} new session(s) "
-                f"imported, {result.sessions_updated} updated, "
-                f"{result.sessions_skipped} skipped.",
+                f"Import finished: {result.sessions_imported} new, "
+                f"{result.sessions_updated} already known, "
+                f"total now {total_now} sessions.",
             )
             if log_lines:
                 messages.info(request, "\n".join(log_lines), extra_tags="log")
