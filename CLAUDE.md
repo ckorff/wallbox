@@ -111,10 +111,11 @@ service (see Development Environment → Deployment).
   the 401 ladder are in `docs/keba_api.md`.
 - **Why REST, not OCPP / UDP / Modbus:** OCPP and UDP `report 1xx`
   polling were both tried and discarded before we found the REST API.
-  The REST API wins because TCP is reliable on the flaky Wi-Fi link,
-  the wallbox itself persists session history (so backend downtime
-  cannot lose data), and we don't need to detect transitions — we
-  just diff the session list.
+  The REST API wins on substance: a documented endpoint surface, JSON
+  with proper HTTP status codes, signed MVA records alongside the
+  CSV-equivalent export, and the wallbox itself persists session
+  history — so backend downtime cannot lose data, and we just diff the
+  session list rather than detect transitions.
 - **Eichrecht artifact:** the wallbox's MVA public key is archived once
   at `media/wallbox_mva_public_key.json` (serial + hex). Its SHA-256
   fingerprint is printed in every monthly PDF's footer so the employer
@@ -255,6 +256,16 @@ python manage.py test
   month must be handled correctly – do not assume one tariff per month.
 - **Total amount:** `total_amount_eur = energy_cost_eur`. The base fee
   is intentionally not part of the calculation.
+- **Billable sessions:** the wallbox emits a short 0-kWh entry for each
+  RFID authorization event immediately before the real charge.
+  Currently these are tagged with `tokenId = "predefinedTokenId"`
+  because remote-start authorisation comes via OCPP_RS_TLS, not the
+  swiped card. `ingest_json_row` drops them at the ingest boundary
+  (`energy_kwh == 0` → no DB row), so monthly totals, session counts
+  and the PDF table inherit billable-only state automatically. The
+  dashboard auto-import applies the equivalent `> 0` filter against
+  the raw API field `energyConsumedInKwh` so its "new rows?" diff
+  matches what the DB will accept.
 
 ## UI (admin-only, `@staff_member_required`)
 
@@ -349,18 +360,15 @@ manual override; the per-pageload auto-import (see
 - Footer: "Generated automatically from the KEBA P30 wallbox session log."
 
 ## Out of scope right now (do not build)
-- Email delivery → Phase 3
-- Scheduled / automated report generation → Phase 3
 - Per-session manual edits, marking sessions as private/business
 - Multi-vehicle support
 - Tax / THG-Quote features
 - Any kind of base fee / fixed cost accounting (deliberately removed in 2.5)
 
 ## Open Questions / TODO
-- **SMTP server:** still TBD (own server / IONOS / Mailgun / Gmail SMTP /
-  …). Settings keys exist in `.env`; until `EMAIL_HOST` is filled in,
-  the Reports-page "Send by email" button surfaces a clear "SMTP server
-  is not configured" error.
+- **SMTP server:** outbound mail goes through Strato
+  (`smtp.strato.de:465`, implicit TLS) from a dedicated mailbox
+  `wallbox@ingko.de`. Credentials live in `.env`.
 - **Re-import of sessions after report generation:** if new sessions
   arrive for an already-reported month (rare, but possible if
   `keba_import` was behind), the user regenerates the report manually
