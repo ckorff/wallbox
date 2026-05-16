@@ -1,8 +1,7 @@
 """HTTP client for the documented KEBA KeMove REST API on port 8443.
 
-Replaces the legacy PHP-scrape (``charging._legacy_keba_scrape``) as of
-Phase 2.6. Endpoint reference: ``docs/keba_api.md``. JWT-based auth with
-a 15-minute accessToken and a 30-day refreshToken; the 401 ladder is
+Endpoint reference: ``docs/keba_api.md``. JWT-based auth with a
+15-minute accessToken and a 30-day refreshToken; the 401 ladder is
 refresh → fall back to full login → raise.
 
 All HTTP funnels through ``_request`` so tests have one mock seam.

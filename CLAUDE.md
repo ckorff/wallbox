@@ -44,8 +44,9 @@ Removed in migration `0006`: `Tariff.base_fee_eur_per_month`, the
 ### Phase 2.6: complete ✅ – REST API migration
 The legacy PHP-scrape against the wallbox web UI was replaced by the
 documented KeMove REST API on `:8443`. Client at
-`charging/keba_api.py`, full reference in `docs/keba_api.md`. The old
-scrape is preserved (dormant) as `charging/_legacy_keba_scrape.py`.
+`charging/keba_api.py`, full reference in `docs/keba_api.md`. The
+dormant scrape backup was removed during the Phase 3 cleanup pass —
+recover from git history if the REST API ever needs replacing again.
 
 ### Phase 2.7: complete ✅ – Eichrechtskonformität im PDF
 MVA-signed records (`mva_record_data`, `mva_record_signature`) flow
@@ -114,10 +115,6 @@ service (see Development Environment → Deployment).
   the wallbox itself persists session history (so backend downtime
   cannot lose data), and we don't need to detect transitions — we
   just diff the session list.
-- **Legacy fallback:** `charging/_legacy_keba_scrape.py` retains the
-  pre-REST web-UI scrape (replay `/ajax.php` login → `/export.php`).
-  Dormant; useful only if the REST API stops responding while the
-  wallbox web UI is still up.
 - **Eichrecht artifact:** the wallbox's MVA public key is archived once
   at `media/wallbox_mva_public_key.json` (serial + hex). Its SHA-256
   fingerprint is printed in every monthly PDF's footer so the employer
