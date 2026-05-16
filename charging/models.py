@@ -1,3 +1,11 @@
+"""Database models for the charging-cost tracker.
+
+Four tables: ``Tariff`` (historical energy prices, never edited in place),
+``ChargingSession`` (one row per billable wallbox session, MVA-signed
+records included), ``MonthlyReport`` (one row per generated PDF) and
+``AppSettings`` (singleton holding user-editable runtime config).
+Business-rule rationale lives in ``CLAUDE.md``; this file is just shape.
+"""
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone

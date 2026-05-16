@@ -199,24 +199,20 @@
 </div>
 
 <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
-  {% if live_state.state == "CHARGING" or live_state.state == "ERROR" %}
-    <div class="bg-card border border-[rgba(94,234,255,0.10)] rounded-card p-6">
-  {% else %}
-    <div class="bg-card border border-accent rounded-card shadow-glow p-6">
-  {% endif %}
+  <div class="bg-card border border-[rgba(94,234,255,0.10)] rounded-card p-6">
     <div class="flex items-center gap-2 text-text-muted uppercase tracking-[0.14em] text-[11px] font-medium mb-2">
       <i class="ti ti-refresh text-sm"></i>
       <span>Import</span>
     </div>
     <h2 class="text-lg text-text-primary font-medium mb-1">Run import now</h2>
     <p class="text-sm text-text-secondary mb-4">
-      Fetch sessions from the wallbox API and ingest any new ones.
+      Auto-import runs on every dashboard load. Use this only to force a re-fetch.
     </p>
     <form method="post">
       {% csrf_token %}
       <input type="hidden" name="action" value="run_import">
       <button type="submit"
-              class="inline-flex items-center gap-2 bg-accent hover:bg-accent-hover text-bg font-medium px-4 py-2 rounded-btn transition-colors cursor-pointer">
+              class="inline-flex items-center gap-2 border border-accent text-accent hover:bg-accent hover:text-bg font-medium px-4 py-2 rounded-btn transition-colors cursor-pointer">
         <i class="ti ti-refresh"></i>
         <span>Run import now</span>
       </button>

@@ -1,3 +1,10 @@
+"""HTTP views for the charging app — dashboard, settings hub, reports.
+
+All views are ``@staff_member_required``; the app is intentionally
+single-user (LAN-only) so there's no public surface. Heavy work
+(imports, PDF rendering, SMTP) lives in ``charging.services.*`` —
+views only orchestrate forms, redirects and flash messages.
+"""
 import calendar
 import logging
 from datetime import date

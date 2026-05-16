@@ -1,7 +1,5 @@
 """Tests for the Phase 3 email-delivery path (service + Reports view)."""
-from datetime import date
 from decimal import Decimal
-from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core import mail

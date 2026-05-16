@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from django.test import TestCase, override_settings
 
-from charging.services.wallbox_state import LiveStateView, fetch_live_state
+from charging.services.wallbox_state import fetch_live_state
 
 
 def _write_archived_key(media_root: Path, serial: str = "34416115") -> None:

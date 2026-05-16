@@ -1,3 +1,10 @@
+"""Django-admin registrations — surfaced in the UI as the "Raw data" tab.
+
+Sessions are read/write so the user can drop a row to force a re-import
+(see ``charging.services.auto_import``). Tariffs and MonthlyReports are
+deliberately read-only here: tariffs are historical and must never be
+edited in place, reports must be regenerated through the Reports page.
+"""
 from django.contrib import admin
 
 from .models import ChargingSession, MonthlyReport, Tariff

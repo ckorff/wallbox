@@ -1,3 +1,11 @@
+"""Forms backing the /settings/ hub.
+
+Three subforms share the same ``AppSettings`` singleton via
+``kwargs.setdefault("instance", AppSettings.current())`` so each section
+can be POSTed independently without clobbering the other sections'
+fields. The Wallbox-API password uses a blank-on-submit-keeps-existing
+convention so the encrypted value never round-trips through the HTML.
+"""
 from decimal import Decimal
 
 from django import forms

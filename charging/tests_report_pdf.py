@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 from django.test import TestCase, override_settings
 from django.template.loader import render_to_string
 
-from charging.models import ChargingSession, MonthlyReport, Tariff
+from charging.models import ChargingSession, Tariff
 from charging.services.pdf import (
     attach_pdf_to_report,
     build_report_context,

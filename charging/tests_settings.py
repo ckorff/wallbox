@@ -4,7 +4,6 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.db import connection
 from django.test import TestCase, override_settings
-from django.urls import reverse
 
 from charging.models import AppSettings
 from charging.services.keba_client import build_keba_client

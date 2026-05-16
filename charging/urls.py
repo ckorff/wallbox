@@ -1,3 +1,4 @@
+"""URL routing for the charging app — three staff-only pages."""
 from django.urls import path
 
 from . import views
