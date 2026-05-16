@@ -10,16 +10,34 @@ from django.urls import reverse
 
 from charging.models import AppSettings, ChargingSession, MonthlyReport, Tariff
 from charging.services import import_runner
+from charging.services.auto_import import AutoImportOutcome
 from charging.services.import_runner import ImportResult, run_keba_import
 from charging.services.wallbox_state import LiveStateView
 
 
+_NOOP_AUTO_IMPORT = AutoImportOutcome(
+    checked=False, wallbox_count=0, db_count=0, imported=0, error=None
+)
+
+
 def _patch_live_state(test_case, view=None):
-    """Stop fetch_live_state from touching the real wallbox during tests."""
+    """Stop fetch_live_state and auto_import_if_new_sessions from hitting the wallbox.
+
+    Both helpers fire per dashboard pageload, so any test that hits the
+    dashboard URL needs them stubbed. Tests that want to assert on the
+    auto-import path use the dedicated mock seam in
+    ``charging.views.auto_import_if_new_sessions``.
+    """
     view = view or LiveStateView(not_linked=True)
-    patcher = patch("charging.views.fetch_live_state", return_value=view)
-    patcher.start()
-    test_case.addCleanup(patcher.stop)
+    live_patcher = patch("charging.views.fetch_live_state", return_value=view)
+    auto_patcher = patch(
+        "charging.views.auto_import_if_new_sessions",
+        return_value=_NOOP_AUTO_IMPORT,
+    )
+    live_patcher.start()
+    auto_patcher.start()
+    test_case.addCleanup(live_patcher.stop)
+    test_case.addCleanup(auto_patcher.stop)
 
 
 BERLIN = ZoneInfo("Europe/Berlin")

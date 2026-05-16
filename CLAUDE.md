@@ -76,10 +76,25 @@ trend on energy. Unreachable wallbox falls back to a last-known cache at
 (`session_energy_cost_eur` in `charging/services/reports.py`) is reused
 by both the monthly-report calculation and the dashboard summary.
 
-### Phase 3: next 🚧 – email delivery + scheduled imports
-SMTP-based monthly report email to the address stored in `AppSettings`,
-plus a systemd timer that runs `keba_import` on a cadence with simple
-retry/backoff for the flaky-WLAN case. Plan: `docs/ROADMAP.md`.
+### Phase 3: complete ✅ – email delivery + dashboard-driven auto-import
+Reports page gained a per-row "Send by email" button that attaches the
+generated PDF and sends it to `AppSettings.report_recipient_email` via
+SMTP. The dispatcher lives in `charging/services/email.py`; SMTP
+transport (`EMAIL_HOST`/`EMAIL_PORT`/`EMAIL_HOST_USER`/`EMAIL_HOST_PASSWORD`/
+`EMAIL_USE_TLS`/`DEFAULT_FROM_EMAIL`) stays in `.env` — secrets do not
+land in the DB. With `EMAIL_HOST` blank, the backend falls back to
+Django's console backend so unit tests and unconfigured dev runs are
+safe; `send_report_email` still refuses to dispatch in that state.
+
+Scheduled imports were replaced by a dashboard-driven check
+(`charging/services/auto_import.py`): every dashboard pageload fetches
+`/v2/sessions` once, counts *billable* rows (0-kWh swipes are filtered
+to match the ingest path), and if the wallbox has more than the DB has
+it ingests the new rows from the same response — one network call, not
+two. Wallbox/auth errors are returned in the outcome rather than
+propagated, so the dashboard always renders. Newly imported rows
+surface as a one-time Django success flash; no-ops are silent. The
+manual "Run import now" button remains for forced re-imports.
 
 ### Later
 Phase 4 — see `docs/ROADMAP.md` for sequencing and content.
@@ -132,8 +147,11 @@ service (see Development Environment → Deployment).
 - WeasyPrint for PDF generation
 - Web serving: Gunicorn (WSGI) behind no reverse proxy — LAN-only, no HTTPS.
   WhiteNoise serves static files directly from the Gunicorn process.
-- Email delivery: Django's built-in email framework over SMTP (Phase 3)
-- Scheduled tasks: systemd timer (Phase 3, no Celery, no cron-overkill)
+- Email delivery: Django's built-in email framework over SMTP; SMTP creds
+  live in `.env`, dispatcher at `charging/services/email.py`
+- Imports: triggered by dashboard pageloads via
+  `charging/services/auto_import.py`; no external scheduler (no cron,
+  no systemd timer, no Celery)
 - Django i18n: `LANGUAGE_CODE = 'en'`, `TIME_ZONE = 'Europe/Berlin'`
 
 ## Development Environment
@@ -164,6 +182,20 @@ from `.env` via django-environ:
 A missing required value should fail loudly at startup, not silently
 render a blank field in the PDF.
 
+## SMTP / email
+SMTP transport for the monthly report PDF (Phase 3). Read from `.env`
+via django-environ — secrets stay out of the DB. The recipient address
+lives in `AppSettings.report_recipient_email` (set on `/settings/`),
+not in `.env`.
+- `EMAIL_HOST` — e.g. `smtp.strato.de`. Blank disables SMTP and falls
+  back to Django's console backend so dev runs without credentials are
+  safe; `send_report_email` still refuses to dispatch in that state.
+- `EMAIL_PORT` — default `587`
+- `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`
+- `EMAIL_USE_TLS` — default `True` (STARTTLS); set `EMAIL_USE_SSL=True`
+  instead for implicit-TLS providers
+- `DEFAULT_FROM_EMAIL` — appears as the `From:` header
+
 ## Conventions
 - Code, comments, identifiers, UI texts, templates and PDF/email exports: **English**
 - Date/time format: ISO 8601 internally; "8 May 2026" or "2026-05" in UI/PDF
@@ -178,7 +210,7 @@ render a blank field in the PDF.
 source .venv/bin/activate
 sudo systemctl restart wallbox                           # apply code/template changes (service is the runtime)
 journalctl -u wallbox -f                                 # tail web-UI logs
-python manage.py keba_import                             # fetch + ingest live wallbox CSV
+python manage.py keba_import                             # fetch + ingest live wallbox sessions
 python manage.py keba_import --file <path.csv>           # ingest a CSV downloaded by hand
 python manage.py keba_import -v 2                        # verbose: per-stage + per-row outcomes
 KEBA_DUMP_DIR=debug python manage.py keba_import         # tee the raw HTTP body to debug/ for inspection
@@ -237,6 +269,11 @@ current username next to it). The active page's nav link is visually
 highlighted.
 
 1. **Dashboard** at `/dashboard/` (root `/` redirects here):
+   - Auto-import: every pageload calls
+     `auto_import_if_new_sessions()`, which fetches `/v2/sessions`,
+     compares the billable count to the DB and ingests any new rows.
+     Imported-count surfaces as a one-time success flash; wallbox-
+     unreachable is silent (the live-state UI already says so).
    - Status block (read-only): total number of charging sessions,
      timestamp of the most recently imported session, total energy
      captured (kWh), and the last generated `MonthlyReport`
@@ -244,7 +281,8 @@ highlighted.
    - Action block:
      - "Run import now" – POST form that runs `keba_import`
        synchronously and redirects back with a success message
-       (number of newly imported sessions) or error message.
+       (number of newly imported sessions) or error message. Kept as
+       a manual override even though auto-import covers the common case.
      - "Open latest report" – link to the most recent `MonthlyReport`'s
        PDF if any, else disabled with a hint.
 2. **Settings** at `/settings/` — four anchored sub-sections:
@@ -252,7 +290,8 @@ highlighted.
    - **Wallbox API** (`#wallbox-api`): username + password for the
      REST API (encrypted via `EncryptedField`; blank-on-submit
      preserves the stored value)
-   - **Report recipient** (`#report-recipient`): email for Phase 3
+   - **Report recipient** (`#report-recipient`): email for the
+     monthly PDF send
    - **Eichrecht info** (`#eichrecht`, read-only): wallbox serial,
      public-key fingerprint, live-fetched firmware + DIP state with
      graceful "unreachable" fallback
@@ -317,15 +356,14 @@ imports are a Phase 3 concern.
 - Any kind of base fee / fixed cost accounting (deliberately removed in 2.5)
 
 ## Open Questions / TODO
-- **SMTP server:** Phase 3 (own server / IONOS / Mailgun / Gmail SMTP / …)
-- **Recipient email:** Phase 3, will go into `.env`
+- **SMTP server:** still TBD (own server / IONOS / Mailgun / Gmail SMTP /
+  …). Settings keys exist in `.env`; until `EMAIL_HOST` is filled in,
+  the Reports-page "Send by email" button surfaces a clear "SMTP server
+  is not configured" error.
 - **Re-import of sessions after report generation:** if new sessions
   arrive for an already-reported month (rare, but possible if
   `keba_import` was behind), the user regenerates the report manually
   via the Reports page. Decide later whether to flag this in the UI.
-- **Automation:** `keba_import` is run manually today. Decide on a
-  systemd timer cadence (likely daily) and add retry/backoff for the
-  flaky-WLAN case before automating.
 
 ## What Claude Should Do
 - For new features: write the test first, then the implementation (TDD)

@@ -77,6 +77,26 @@
                     <i class="ti ti-download"></i>
                     <span>Download PDF</span>
                   </a>
+                  {% if report_recipient_email %}
+                    <form method="post" class="m-0 p-0 inline">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="send_email">
+                      <input type="hidden" name="year" value="{{ entry.year }}">
+                      <input type="hidden" name="month" value="{{ entry.month }}">
+                      <button type="submit"
+                              class="inline-flex items-center gap-1 border border-[rgba(94,234,255,0.20)] text-text-primary hover:border-accent hover:text-accent font-medium px-3 py-1.5 rounded-btn transition-colors text-sm cursor-pointer"
+                              title="Send to {{ report_recipient_email }}">
+                        <i class="ti ti-mail-forward"></i>
+                        <span>Send by email</span>
+                      </button>
+                    </form>
+                  {% else %}
+                    <span class="inline-flex items-center gap-1 border border-[rgba(94,234,255,0.10)] text-text-muted font-medium px-3 py-1.5 rounded-btn text-sm cursor-not-allowed"
+                          title="Set a recipient on the settings page first">
+                      <i class="ti ti-mail-off"></i>
+                      <span>Send by email</span>
+                    </span>
+                  {% endif %}
                 {% endif %}
               </div>
             </td>

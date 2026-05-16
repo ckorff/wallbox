@@ -13,6 +13,8 @@ from django.utils import timezone
 
 from .forms import ReportRecipientForm, TariffForm, WallboxApiForm
 from .models import AppSettings, ChargingSession, MonthlyReport, Tariff
+from .services.auto_import import auto_import_if_new_sessions
+from .services.email import ReportEmailError, send_report_email
 from .services.import_runner import run_keba_import
 from .services.monthly_summary import (
     current_month_summary,
@@ -54,6 +56,17 @@ def dashboard(request):
             if log_lines:
                 messages.info(request, "\n".join(log_lines), extra_tags="log")
         return redirect(reverse("dashboard"))
+
+    # Per-pageload auto-import: pull any sessions the wallbox knows about
+    # that we don't. Silent unless something was actually imported — the
+    # wallbox-unreachable case is already surfaced by the live_state UI.
+    auto = auto_import_if_new_sessions()
+    if auto.imported:
+        messages.success(
+            request,
+            f"Auto-imported {auto.imported} new "
+            f"session{'s' if auto.imported != 1 else ''} from the wallbox.",
+        )
 
     session_total = ChargingSession.objects.count()
     total_kwh = (
@@ -177,11 +190,38 @@ def _collect_report_entries():
 @staff_member_required
 def reports_index(request):
     if request.method == "POST":
+        action = request.POST.get("action", "generate")
         target = _parse_year_month(
             request.POST.get("year"), request.POST.get("month")
         )
         if target is None:
             messages.error(request, "Invalid year/month.")
+        elif action == "send_email":
+            year, month = target
+            label = date(year, month, 1).strftime("%B %Y")
+            report = MonthlyReport.objects.filter(year=year, month=month).first()
+            if report is None:
+                messages.error(
+                    request,
+                    f"Cannot send {label}: no report has been generated yet.",
+                )
+            else:
+                try:
+                    sent = send_report_email(report)
+                except ReportEmailError as exc:
+                    messages.error(request, f"Could not send {label}: {exc}")
+                except Exception as exc:
+                    logger.exception("send_report_email failed")
+                    messages.error(
+                        request,
+                        f"Could not send {label} ({type(exc).__name__}): {exc}",
+                    )
+                else:
+                    messages.success(
+                        request,
+                        f"{label} report emailed to {sent.recipient}.",
+                    )
+                    return redirect(reverse("reports_index"))
         else:
             year, month = target
             label = date(year, month, 1).strftime("%B %Y")
@@ -208,8 +248,13 @@ def reports_index(request):
         .order_by("-year", "-month")
         .first()
     )
+    recipient = AppSettings.current().report_recipient_email
     return render(
         request,
         "charging/reports.html",
-        {"entries": entries, "latest_report": latest_report},
+        {
+            "entries": entries,
+            "latest_report": latest_report,
+            "report_recipient_email": recipient,
+        },
     )

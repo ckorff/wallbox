@@ -161,6 +161,24 @@ KEBA_API_VERIFY_TLS = env.bool("KEBA_API_VERIFY_TLS", default=False)
 KEBA_API_USERNAME = env("KEBA_API_USERNAME", default="")
 KEBA_API_PASSWORD = env("KEBA_API_PASSWORD", default="")
 
+# Email (Phase 3) — SMTP transport for the monthly report. Empty EMAIL_HOST
+# falls back to Django's console backend so unit tests and CLI runs without
+# a configured server are still safe; the dispatcher checks EMAIL_HOST
+# explicitly before sending so missing config surfaces as a clear UI error
+# instead of silently writing to stdout.
+EMAIL_BACKEND = (
+    "django.core.mail.backends.smtp.EmailBackend"
+    if env("EMAIL_HOST", default="")
+    else "django.core.mail.backends.console.EmailBackend"
+)
+EMAIL_HOST = env("EMAIL_HOST", default="")
+EMAIL_PORT = env.int("EMAIL_PORT", default=587)
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
+EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
+EMAIL_USE_SSL = env.bool("EMAIL_USE_SSL", default=False)
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="wallbox@localhost")
+
 # Reporter and vehicle profile — printed on every monthly PDF report.
 # Required: missing values raise ImproperlyConfigured at startup so we never
 # silently render a blank field in the PDF.
