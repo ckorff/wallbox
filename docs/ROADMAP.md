@@ -10,172 +10,63 @@
 
 ## Reihenfolge
 
-Die Phasen bauen aufeinander auf. Empfohlene Reihenfolge:
+Die Phasen 2.6 bis 3 sind abgeschlossen (Kurzfassung unten, Details
+in CLAUDE.md → Phase-Status). Offen:
 
-1. **Phase 2.6** – Migration CSV-Scrape → REST-API
-2. **Phase 2.7** – Eichrechtskonformität im PDF
-3. **Phase 2.8** – Settings-Seite konsolidieren
-4. **Phase 2.9** – Dashboard: Live-State und Monatsübersicht
-5. **Phase 3** – Email-Versand + Scheduled Imports
-6. **Phase 4** (optional) – Reports-Vollständigkeitsanzeige, Custom-Range-Reports
+1. **Phase 4** (optional) – Reports-Vollständigkeitsanzeige, Custom-Range-Reports
 
 ---
 
-## Phase 2.6: Migration CSV-Scrape → REST-API
+## Phase 2.6: Migration CSV-Scrape → REST-API ✅ erledigt
 
-**Ziel:** Den bestehenden PHP-Scrape durch die offizielle KeMove REST-API auf Port 8443 ersetzen.
-
-### Vorbereitung
-
-- Git-Tag setzen: `git tag -a v0.2-csv-scrape -m "Last version before REST API migration"`
-- DB-Snapshot: `cp db.sqlite3 db.sqlite3.pre-api`
-- Neue Datei `docs/keba_api.md` mit den Endpunkten, die wir nutzen, dem Auth-Flow (JWT mit accessToken 15 min, refreshToken 30 Tage) und den TLS-Hinweisen (self-signed Cert). Die vollständige Swagger-UI bleibt für Detail-Recherche auf der Wallbox unter `https://192.168.0.10:8443/docs` erreichbar.
-
-### Konfiguration
-
-- `.env` erweitert um: `KEBA_API_URL=https://192.168.0.10:8443`, `KEBA_API_VERIFY_TLS=false`
-- `KEBA_API_USERNAME` und `KEBA_API_PASSWORD` zunächst auch in `.env`; in Phase 2.8 verlagern wir sie in die Settings-UI
-
-### Implementierung
-
-- Neue `KebaApiClient`-Klasse (analog zum bestehenden Scrape-Code):
-  - `login()` → POST `/v2/jwt/login`, speichert accessToken + refreshToken
-  - `refresh()` → POST `/v2/jwt/refresh`
-  - `export_sessions_csv()` → GET `/v2/sessions/export`, gibt CSV als `bytes` zurück
-  - `get_state()` → GET `/v2/wallboxes/{serial}/state`
-  - `get_wallbox_info()` → GET `/v2/wallboxes/{serial}` (für DIP-Stellung, Firmware, MAC, MeterValue, MVA-Public-Key)
-- Token-Cache in `media/.keba_token.json` (chmod 0600). Bei Start einlesen, bei HTTP 401 einmal refreshen, bei Refresh-Fehler erneuter Login
-- `keba_import` Management Command schaltet auf den neuen Client um
-- `parse_sessions_csv` bleibt **unverändert** – das CSV der API ist byte-identisch zum bisherigen Scrape (verifiziert am 15.05.2026)
-- Alter PHP-Scrape-Code wandert in eine `_legacy_keba_scrape.py` als Backup, falls die API mal ausfällt
-
-### Tests
-
-- Login-Mock, Refresh-Mock, Expired-Token-Mock (401 → Refresh → Retry-Erfolg)
-- Refresh-Expiry-Pfad: 401 auf Refresh → erneuter Login mit Credentials
-- Export-Response gegen das echte CSV-Snippet vom 14.05.2026 parsen
-- Truncated-Response-Detektion: HTTP-Content-Length-Check schließt den alten TODO-Punkt
-
-### Dashboard-Anbindung
-
-- Der „Run import now"-Button bleibt, ruft den neuen Client
-- Feedback-Format: „N new sessions imported, M skipped (already known), total now X" – schlanker als der `-v 2`-Debug, substanzieller als nur „done"
-
-### Nach der Migration
-
-- TODO „Importer doesn't detect truncated HTTP responses" in CLAUDE.md streichen
-- Hardware-Setup-Block in CLAUDE.md neu schreiben: KEBA REST API statt PHP-Scrape, mit Verweis auf `docs/keba_api.md`
+REST-API auf `:8443` ersetzt den PHP-Scrape. Client in
+`charging/keba_api.py`, vollständige Endpunkt-Referenz in
+`docs/keba_api.md`. Details siehe CLAUDE.md → Phase 2.6.
 
 ---
 
-## Phase 2.7: Eichrechtskonformität im PDF
+## Phase 2.7: Eichrechtskonformität im PDF ✅ erledigt
 
-**Ziel:** Die MVA-signierten Records, die die Wallbox produziert, für den Arbeitgeber sichtbar und nachprüfbar machen.
-
-### Datenmodell-Erweiterung
-
-- `ChargingSession` bekommt zwei neue Felder:
-  - `mva_record_data` (TextField, nullable) – das `mvaRecordData`-JSON pro Session
-  - `mva_record_signature` (TextField, nullable) – das `mvaRecordSignature`-JSON
-- Beide werden beim Import aus `/v2/sessions` gefüllt (sind dort schon enthalten)
-- Migration nullable, weil ältere Sessions vor der API-Migration keine MVA-Records haben
-
-### Public Key archivieren
-
-- Beim ersten erfolgreichen API-Login (oder beim ersten `get_wallbox_info()`): den `mvaPublicKey` aus `/v2/wallboxes/{serial}` lesen
-- Speichern in `media/wallbox_mva_public_key.json` (Wallbox-Serial + Public-Key-Hex)
-- SHA-256-Fingerprint vom Public-Key-Hex berechnen und in den Settings anzeigen, damit jederzeit nachprüfbar
-
-### PDF-Anpassungen
-
-- Footer-Block ergänzen:
-
-  > Charging session data is signed by the KEBA KeContact P30 wallbox (MVA, Eichrecht-compliant).  
-  > Wallbox serial: `00000000`. Public key fingerprint: `<SHA-256>`.  
-  > Original signed records available on request.
-
-- Pro Zeile in der Sessions-Tabelle ein kleines „✓"-Symbol, wenn ein `mva_record_signature` vorhanden ist
-- Die Public-Key-Datei kann als Anhang mitgeschickt werden (siehe Phase 3, Email-Versand) oder als Hinweis im Footer „verfügbar auf Anfrage" stehen bleiben
-
-### Out of Scope für diese Phase
-
-- ECDSA-Signatur-Verifikation in der App selbst (nicht von HR gefordert; strukturell vorbereitet durch die Rohdaten in der DB, falls später benötigt)
+MVA-signierte Records (`mva_record_data`, `mva_record_signature`)
+landen via `ingest_json_row` in der DB; der Public-Key-Fingerprint
+und die Wallbox-Serial erscheinen im PDF-Footer, signierte Sessions
+sind in der Tabelle mit ✓ markiert. ECDSA-Verifikation in-app bleibt
+out of scope. Details siehe CLAUDE.md → Phase 2.7.
 
 ---
 
-## Phase 2.8: Settings-Seite konsolidieren
+## Phase 2.8: Settings-Seite konsolidieren ✅ erledigt
 
-**Ziel:** Tariff-Settings zu einer allgemeinen Settings-Seite erweitern. API-Credentials und Empfänger-Adresse dort verwalten.
-
-### UI
-
-- Eine Seite `/settings/` mit Abschnitten:
-  - **Tariff** – wie heute, Tabelle der historischen Tarife plus „Add new tariff"-Formular
-  - **Wallbox API** – Username und Passwort. Host/URL bleibt in `.env` (Infrastruktur, nicht Geschäftslogik)
-  - **Report recipient** – Email-Adresse für den Versand (wird in Phase 3 wirksam)
-  - **Eichrecht info** (read-only) – Wallbox-Serial, Firmware-Version, Public-Key-Fingerprint, „Last DIP read"-Zeitstempel
-
-### Datenmodell
-
-- Neues Singleton-Modell `AppSettings`:
-  - `keba_api_username` (CharField)
-  - `keba_api_password` (encrypted CharField – Django-Fernet, kein Klartext in der DB)
-  - `report_recipient_email` (EmailField, leer erlaubt)
-- Helper `AppSettings.current()` mit `get_or_create(pk=1)` garantiert genau eine Instanz
-
-### Migration
-
-- Beim ersten Aufruf der neuen Settings-Seite: bestehende `.env`-Werte als Defaults vorschlagen, sanfter Übergang
-- `.env`-Fallback bleibt für CLI-Runs ohne UI-Setup; DB-Werte gewinnen, sobald gesetzt
+`/settings/` mit vier Sektionen: Tariff, Wallbox API
+(encrypted-at-rest via `EncryptedField`), Report recipient,
+Eichrecht info (read-only, mit live gefetchter Firmware/DIP).
+API-Credentials liegen im `AppSettings`-Singleton; `.env` bleibt
+CLI-Fallback. Details siehe CLAUDE.md → Phase 2.8.
 
 ---
 
-## Phase 2.9: Dashboard – Live-State und Monatsübersicht
+## Phase 2.9: Dashboard – Live-State und Monatsübersicht ✅ erledigt
 
-**Ziel:** Dashboard zeigt aktuelle Wallbox-Aktivität und kompakte Monatsstatistik.
-
-### Live-State (API-Call pro Pageload)
-
-- Beim Dashboard-Render: `/v2/wallboxes/{serial}/state` (~50 ms)
-- Anzeige:
-  - State (`IDLE`, `CHARGING`, `ERROR`, …)
-  - Bei `CHARGING`: aktuelle Leistung (aus `/v2/wallboxes/{serial}`), gestartet vor X Minuten
-  - Bei `ERROR`: errorCode + kurzer Hinweis
-- Fehler-Fallback: „Wallbox unreachable – showing last known status" mit Zeitstempel des letzten Erfolgs
-- Bewusste Entscheidung: Full-Session-Sync läuft **nicht** bei jedem Pageload (Phase 3 deckt das per systemd-Timer ab)
-
-### Monatsübersicht (aus DB, kein API-Call)
-
-- Aktueller Monat:
-  - Anzahl Sessions
-  - Total kWh
-  - Aufgelaufene Kosten (mit aktuell gültigem Tarif berechnet)
-- Vormonatsvergleich als kleiner Trend-Indikator
-
-### Navigation
-
-- Django-Admin bleibt drin, aber als „Raw data" in der Navigation umetikettiert (keine eigene Komplett-Ersatz-UI, das wäre Wochen Arbeit für minimalen Gewinn)
-- Reports-Seite bekommt einen Inline-PDF-Viewer (iframe auf das aktuellste PDF, oder PDF.js)
-- Settings-Link in die Hauptnavigation aufnehmen
+Dashboard zeigt Live-State (`IDLE` / `CHARGING` / `ERROR`) per Pageload,
+mit Last-Known-State-Cache bei unreachable Wallbox, plus kompakte
+Monatsübersicht und Vormonatsvergleich. Reports-Seite hat einen
+Inline-PDF-Viewer; Admin-Link heißt jetzt "Raw data". Details siehe
+CLAUDE.md → Phase 2.9.
 
 ---
 
-## Phase 3: Email-Versand + Scheduled Imports
+## Phase 3: Email-Versand + Auto-Import ✅ erledigt
 
-### Email
+Email-Versand über Strato SMTP (`smtp.strato.de:465`, implicit TLS) von
+`wallbox@ingko.de`. "Send by email"-Button pro Reports-Zeile;
+SMTP-Credentials in `.env`, Empfänger in `AppSettings`.
 
-- Empfänger aus `AppSettings.report_recipient_email`
-- SMTP-Config in `.env` (Host, Port, User, Password – Secrets bleiben aus der DB raus)
-- „Send by email"-Button auf der Reports-Seite, hängt das PDF an
-- Email-Template mit Standardtext, Subject „Charging report – <Month> <Year>"
-- Optional via Settings-Toggle: bei automatischer Report-Generierung gleich mitversenden
-
-### Scheduled Imports
-
-- systemd-Timer alle 15–30 min (kein Celery, kein Cron)
-- Unit-Pärchen `wallbox-import.service` + `wallbox-import.timer`, ruft `python manage.py keba_import`
-- Retry/Backoff bei API-Fehlern: 3 Versuche mit exponentiellem Backoff
-- Ergebnisse in journald (über systemd), in der UI eine „Last import"-Zeile mit Zeitstempel und Ergebnis
+**Achtung – Plan-Abweichung:** der ursprünglich geplante systemd-Timer
+für Scheduled Imports wurde verworfen. Stattdessen löst jeder
+Dashboard-Pageload einen Import aus, wenn die Wallbox mehr Billable
+Sessions hat als die DB (`charging/services/auto_import.py`, ein
+einziger `/v2/sessions`-Call deckt Count-Check und Ingest ab). Gründe
+und Mechanik: CLAUDE.md → Phase 3.
 
 ---
 
@@ -201,4 +92,4 @@ Die Phasen bauen aufeinander auf. Empfohlene Reihenfolge:
 Keine kritischen mehr offen.
 
 - Eichrecht: über HR-Policy geklärt (Footer-Hinweis + Public-Key reichen aus)
-- API beim Dashboard-Aufruf: Live-State bei jedem Pageload (billig), Full-Session-Sync per systemd-Timer (Phase 3)
+- API beim Dashboard-Aufruf: Live-State und Auto-Import beide bei jedem Pageload (ein gemeinsamer `/v2/sessions`-Call)
