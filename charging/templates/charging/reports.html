@@ -5,6 +5,27 @@
 {% block content %}
 <h1 class="text-2xl font-medium mb-8">Reports</h1>
 
+{% if latest_report %}
+  <section class="mb-8">
+    <div class="flex items-center justify-between mb-3">
+      <div class="uppercase tracking-[0.14em] text-text-muted text-xs font-medium">
+        Latest report — {{ latest_report.year }}-{{ latest_report.month|stringformat:"02d" }}
+      </div>
+      <a href="{{ latest_report.pdf.url }}?v={{ latest_report.generated_at|date:'U' }}"
+         target="_blank"
+         rel="noopener"
+         class="inline-flex items-center gap-1 text-text-secondary hover:text-accent text-sm">
+        <i class="ti ti-external-link"></i>
+        <span>Open in new tab</span>
+      </a>
+    </div>
+    <iframe src="{{ latest_report.pdf.url }}?v={{ latest_report.generated_at|date:'U' }}"
+            class="w-full h-[80vh] rounded-card border border-[rgba(94,234,255,0.10)] bg-card"
+            title="Latest report PDF">
+    </iframe>
+  </section>
+{% endif %}
+
 {% if entries %}
   <section class="bg-card border border-[rgba(94,234,255,0.10)] rounded-card overflow-hidden">
     <table class="w-full text-sm">

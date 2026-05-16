@@ -65,16 +65,26 @@ state). API credentials live in the `AppSettings` singleton;
 `charging/services/keba_client.py` picks DB-over-`.env`, with `.env`
 retained as fallback for CLI runs that never touched the UI.
 
-### Phase 2.9: next 🚧 – dashboard live state + monthly summary
-Surface the wallbox's live state on the dashboard
-(IDLE / CHARGING / ERROR via `/v2/wallboxes/{serial}/state`) and a
-compact current-month summary. Plan: `docs/ROADMAP.md`.
+### Phase 2.9: complete ✅ – dashboard live state + monthly summary
+Dashboard now shows live wallbox state (`IDLE` / `CHARGING` / `ERROR`)
+fetched per pageload via `/v2/wallboxes/{serial}/state`, with a compact
+current-month summary (sessions, kWh, accrued cost) and a vs.-previous-month
+trend on energy. Unreachable wallbox falls back to a last-known cache at
+`media/.wallbox_state.json`. Reports page gained an inline PDF viewer
+(iframe on the most recent report). Admin nav link rebranded to
+"Raw data". Shared per-session × `Tariff.for_date` cost helper
+(`session_energy_cost_eur` in `charging/services/reports.py`) is reused
+by both the monthly-report calculation and the dashboard summary.
+
+### Phase 3: next 🚧 – email delivery + scheduled imports
+SMTP-based monthly report email to the address stored in `AppSettings`,
+plus a systemd timer that runs `keba_import` on a cadence with simple
+retry/backoff for the flaky-WLAN case. Plan: `docs/ROADMAP.md`.
 
 ### Later
-Phases 3, 4 — see `docs/ROADMAP.md` for sequencing and content.
+Phase 4 — see `docs/ROADMAP.md` for sequencing and content.
 The web UI itself already runs as a permanent systemd-managed Gunicorn
-service (see Development Environment → Deployment); scheduled imports
-and email delivery land in Phase 3.
+service (see Development Environment → Deployment).
 
 ## Hardware Setup
 - **Wallbox:** KEBA P30 x-series (LAN/WLAN, IP configured in `.env`)
@@ -102,6 +112,10 @@ and email delivery land in Phase 3.
   HKDF-derived from `SECRET_KEY`). Editable at `/settings/#wallbox-api`.
   `.env` (`KEBA_API_USERNAME`/`PASSWORD`) is the CLI-only fallback
   before the settings page has been filled in.
+- **Live-state cache:** the dashboard fetches `/state` per pageload and
+  stores the last successful read in `media/.wallbox_state.json`. When
+  the wallbox is unreachable, the dashboard surfaces this cache as
+  "Last known state — wallbox unreachable" rather than failing the page.
 
 ## Tariff (as of May 2026)
 - **Energy price:** 38.5 ct/kWh (or whatever is currently configured)

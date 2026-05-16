@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo
 from django.conf import settings
 
 from charging.keba_csv import parse_sessions_csv
+from charging.models import AppSettings
 from charging.services import ingest_csv_row, ingest_json_row
 from charging.services.keba_client import build_keba_client
 from charging.services.wallbox_key import ensure_wallbox_key_archived
@@ -53,8 +54,18 @@ def run_keba_import(
     say = log or (lambda _: None)
 
     if file is not None:
-        return _import_from_csv_file(file, say)
-    return _import_from_api(say)
+        result = _import_from_csv_file(file, say)
+    else:
+        result = _import_from_api(say)
+
+    # Stamp the dashboard's "Last imported" indicator on successful return.
+    # An exception raised by the inner functions skips this — partial or
+    # failed imports must not look "fresh" on the dashboard.
+    app = AppSettings.current()
+    app.last_import_at = datetime.now(tz=timezone.utc)
+    app.save()
+
+    return result
 
 
 def _import_from_csv_file(

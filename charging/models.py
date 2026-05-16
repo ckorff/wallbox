@@ -94,6 +94,7 @@ class AppSettings(models.Model):
     keba_api_username = models.CharField(max_length=64, blank=True, default="")
     keba_api_password = EncryptedField(blank=True, default="")
     report_recipient_email = models.EmailField(blank=True, default="")
+    last_import_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name = "App settings"

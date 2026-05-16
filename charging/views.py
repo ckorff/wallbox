@@ -1,3 +1,4 @@
+import calendar
 import logging
 from datetime import date
 from decimal import Decimal
@@ -13,9 +14,15 @@ from django.utils import timezone
 from .forms import ReportRecipientForm, TariffForm, WallboxApiForm
 from .models import AppSettings, ChargingSession, MonthlyReport, Tariff
 from .services.import_runner import run_keba_import
+from .services.monthly_summary import (
+    current_month_summary,
+    kwh_trend,
+    previous_month_summary,
+)
 from .services.pdf import attach_pdf_to_report
 from .services.reports import MissingTariffError, generate_monthly_report
 from .services.wallbox_key import fetch_wallbox_status
+from .services.wallbox_state import fetch_live_state
 
 
 BERLIN = ZoneInfo("Europe/Berlin")
@@ -49,21 +56,30 @@ def dashboard(request):
         return redirect(reverse("dashboard"))
 
     session_total = ChargingSession.objects.count()
-    last_session = ChargingSession.objects.order_by("-started_at").first()
     total_kwh = (
         ChargingSession.objects.aggregate(s=Sum("energy_kwh"))["s"]
         or Decimal("0")
     )
     latest_report = MonthlyReport.objects.order_by("-year", "-month").first()
+    last_import_at = AppSettings.current().last_import_at
+    live_state = fetch_live_state()
+    this_month = current_month_summary()
+    last_month = previous_month_summary()
+    trend = kwh_trend(this_month, last_month)
 
     return render(
         request,
         "charging/dashboard.html",
         {
             "session_total": session_total,
-            "last_session": last_session,
             "total_kwh": total_kwh,
             "latest_report": latest_report,
+            "last_import_at": last_import_at,
+            "live_state": live_state,
+            "this_month": this_month,
+            "this_month_name": calendar.month_name[this_month.month],
+            "last_month": last_month,
+            "trend": trend,
         },
     )
 
@@ -187,8 +203,13 @@ def reports_index(request):
                 return redirect(reverse("reports_index"))
 
     entries = _collect_report_entries()
+    latest_report = (
+        MonthlyReport.objects.exclude(pdf="")
+        .order_by("-year", "-month")
+        .first()
+    )
     return render(
         request,
         "charging/reports.html",
-        {"entries": entries},
+        {"entries": entries, "latest_report": latest_report},
     )

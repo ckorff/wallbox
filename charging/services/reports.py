@@ -29,6 +29,22 @@ def _quantize_kwh(value: Decimal) -> Decimal:
     return value.quantize(_KWH, rounding=ROUND_HALF_UP)
 
 
+def session_energy_cost_eur(session) -> Decimal | None:
+    """Cost for a single session in EUR, or None if no tariff applies.
+
+    Shared by the monthly-report calculation (which raises on None) and
+    the dashboard's monthly summary (which degrades gracefully). Keeps
+    the per-session × `Tariff.for_date(session.started_at.date())` rule
+    defined in one place — tariff changes inside a month are handled
+    correctly because every session looks up its own date's tariff.
+    """
+    session_date = session.started_at.astimezone(BERLIN).date()
+    tariff = Tariff.for_date(session_date)
+    if tariff is None:
+        return None
+    return session.energy_kwh * tariff.energy_price_ct_per_kwh / _HUNDRED
+
+
 def _month_bounds(year: int, month: int) -> tuple[datetime, datetime, date]:
     first = date(year, month, 1)
     if month == 12:
@@ -65,17 +81,15 @@ def generate_monthly_report(year: int, month: int) -> MonthlyReport:
     wallbox_kwh_total = Decimal("0")
     energy_cost_eur_raw = Decimal("0")
     for session in sessions:
-        session_date = session.started_at.astimezone(BERLIN).date()
-        tariff = Tariff.for_date(session_date)
-        if tariff is None:
+        cost = session_energy_cost_eur(session)
+        if cost is None:
+            session_date = session.started_at.astimezone(BERLIN).date()
             raise MissingTariffError(
                 f"No tariff valid on {session_date.isoformat()} "
                 f"for session {session.pk}"
             )
         wallbox_kwh_total += session.energy_kwh
-        energy_cost_eur_raw += (
-            session.energy_kwh * tariff.energy_price_ct_per_kwh / _HUNDRED
-        )
+        energy_cost_eur_raw += cost
 
     energy_cost_eur = _quantize_money(energy_cost_eur_raw)
     total_amount_eur = energy_cost_eur

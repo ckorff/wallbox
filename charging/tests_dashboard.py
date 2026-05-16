@@ -8,8 +8,18 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from charging.models import ChargingSession, MonthlyReport, Tariff
-from charging.services.import_runner import ImportResult
+from charging.models import AppSettings, ChargingSession, MonthlyReport, Tariff
+from charging.services import import_runner
+from charging.services.import_runner import ImportResult, run_keba_import
+from charging.services.wallbox_state import LiveStateView
+
+
+def _patch_live_state(test_case, view=None):
+    """Stop fetch_live_state from touching the real wallbox during tests."""
+    view = view or LiveStateView(not_linked=True)
+    patcher = patch("charging.views.fetch_live_state", return_value=view)
+    patcher.start()
+    test_case.addCleanup(patcher.stop)
 
 
 BERLIN = ZoneInfo("Europe/Berlin")
@@ -51,21 +61,26 @@ class RootRedirectTests(TestCase):
 class DashboardEmptyStateTests(TestCase):
     def setUp(self):
         self.client.force_login(_staff_user())
+        _patch_live_state(self)
 
     def test_empty_state_shows_placeholders(self):
         response = self.client.get(reverse("dashboard"))
 
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "charging/dashboard.html")
-        self.assertContains(response, "no sessions yet")
-        self.assertContains(response, "no reports yet")
+        # No imports yet → "Last imported" card shows "never"
+        self.assertContains(response, "never")
+        # No report PDFs yet → action card surfaces the missing-report hint
+        self.assertContains(response, "No report PDF available yet")
         self.assertEqual(response.context["session_total"], 0)
         self.assertEqual(response.context["total_kwh"], Decimal("0"))
+        self.assertIsNone(response.context["last_import_at"])
 
 
 class DashboardWithDataTests(TestCase):
     def setUp(self):
         self.client.force_login(_staff_user())
+        _patch_live_state(self)
         _session(datetime(2026, 5, 1, 10, 0, tzinfo=BERLIN), "4.000")
         _session(datetime(2026, 5, 7, 15, 33, tzinfo=BERLIN), "27.640")
         _session(datetime(2026, 4, 20, 12, 0, tzinfo=BERLIN), "5.500")
@@ -77,27 +92,28 @@ class DashboardWithDataTests(TestCase):
             total_amount_eur=Decimal("2.12"),
         )
 
-    def test_renders_counts_total_last_session_and_report_month(self):
+    def test_renders_counts_total_and_report_month(self):
         response = self.client.get(reverse("dashboard"))
 
         self.assertEqual(response.status_code, 200)
         # Counts and totals
         self.assertEqual(response.context["session_total"], 3)
         self.assertEqual(response.context["total_kwh"], Decimal("37.140"))
-        # Last session is the most recent by started_at (May 7)
-        self.assertEqual(
-            response.context["last_session"].started_at,
-            datetime(2026, 5, 7, 15, 33, tzinfo=BERLIN),
-        )
-        # Latest report month appears (2026-04)
+        # Latest report month appears (2026-04) under the actions card
         self.assertContains(response, "2026-04")
-        # And the human-readable last-session date appears
-        self.assertContains(response, "07.05.2026")
+        # The "Total" section replaces the old "Status" header
+        self.assertContains(response, "Total")
+        self.assertContains(response, "Total sessions")
+        # "Last imported" now reflects AppSettings.last_import_at, not
+        # the most recent session's started_at. With no import recorded
+        # yet, the card shows "never".
+        self.assertContains(response, "never")
 
 
 class DashboardRunImportTests(TestCase):
     def setUp(self):
         self.client.force_login(_staff_user())
+        _patch_live_state(self)
 
     def test_post_run_import_success_message_redirects(self):
         # Seed one existing session so "already known" and "total now" are
@@ -172,6 +188,118 @@ class DashboardRunImportTests(TestCase):
         msgs = [str(m) for m in followed.context["messages"]]
         joined = " ".join(msgs)
         self.assertIn("boom", joined)
+
+
+class DashboardLiveBlockTests(TestCase):
+    """The new live-state and monthly-summary sections (Phase 2.9)."""
+
+    def setUp(self):
+        self.client.force_login(_staff_user())
+
+    def test_idle_state_renders(self):
+        _patch_live_state(
+            self,
+            LiveStateView(state="IDLE", fetched_at="2026-05-16T08:00:00+00:00"),
+        )
+        response = self.client.get(reverse("dashboard"))
+        self.assertContains(response, "Live state")
+        self.assertContains(response, "Idle")
+
+    def test_charging_state_shows_power_and_glow(self):
+        _patch_live_state(
+            self,
+            LiveStateView(
+                state="CHARGING",
+                power_w=11000,
+                fetched_at="2026-05-16T08:00:00+00:00",
+            ),
+        )
+        response = self.client.get(reverse("dashboard"))
+        self.assertContains(response, "Charging")
+        self.assertContains(response, "11000 W")
+        # The live-state card carries the active-glow border when charging.
+        self.assertContains(response, "shadow-glow")
+
+    def test_stale_banner_shown_when_unreachable_with_cache(self):
+        _patch_live_state(
+            self,
+            LiveStateView(
+                state="IDLE",
+                fetched_at="2026-05-15T18:00:00+00:00",
+                stale=True,
+                last_seen_at="2026-05-15T18:00:00+00:00",
+                unreachable_reason="OSError: connection refused",
+            ),
+        )
+        response = self.client.get(reverse("dashboard"))
+        self.assertContains(response, "Last known state")
+        self.assertContains(response, "2026-05-15T18:00:00+00:00")
+
+    def test_not_linked_view_renders_hint(self):
+        _patch_live_state(self, LiveStateView(not_linked=True))
+        response = self.client.get(reverse("dashboard"))
+        self.assertContains(response, "Wallbox not linked")
+        self.assertContains(response, "Run an import once")
+
+    def test_monthly_summary_section_renders(self):
+        _patch_live_state(self)
+        # Seed data so the section has numbers to display.
+        Tariff.objects.create(
+            valid_from=date(2026, 1, 1),
+            energy_price_ct_per_kwh=Decimal("38.500"),
+        )
+        # Pass through to the real summary services — we only assert the
+        # block renders, not specific numbers (those depend on real "now").
+        response = self.client.get(reverse("dashboard"))
+        self.assertEqual(response.status_code, 200)
+        # Section is labelled with the current month name (e.g. "May 2026"),
+        # and per-card labels carry the month name too.
+        this_month_name = response.context["this_month_name"]
+        self.assertContains(response, this_month_name)
+        self.assertContains(response, f"Sessions in {this_month_name}")
+        self.assertContains(response, f"Energy in {this_month_name}")
+        self.assertContains(response, f"Cost in {this_month_name}")
+        self.assertIn("this_month", response.context)
+        self.assertIn("last_month", response.context)
+        self.assertIn("trend", response.context)
+
+
+class LastImportAtTests(TestCase):
+    """The "Last imported" indicator is driven by AppSettings.last_import_at,
+    which run_keba_import stamps after a successful run."""
+
+    def test_successful_import_stamps_last_import_at(self):
+        self.assertIsNone(AppSettings.current().last_import_at)
+
+        with patch.object(
+            import_runner, "_import_from_api", return_value=ImportResult()
+        ):
+            run_keba_import()
+
+        self.assertIsNotNone(AppSettings.current().last_import_at)
+
+    def test_failed_import_does_not_stamp(self):
+        with patch.object(
+            import_runner,
+            "_import_from_api",
+            side_effect=RuntimeError("boom"),
+        ):
+            with self.assertRaises(RuntimeError):
+                run_keba_import()
+
+        self.assertIsNone(AppSettings.current().last_import_at)
+
+    def test_dashboard_renders_last_imported_timestamp(self):
+        app = AppSettings.current()
+        app.last_import_at = datetime(2026, 5, 16, 14, 33, tzinfo=BERLIN)
+        app.save()
+
+        self.client.force_login(_staff_user())
+        _patch_live_state(self)
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertContains(response, "16.05.2026")
+        self.assertContains(response, "14:33")
 
 
 class BaseTemplateMigrationTests(TestCase):

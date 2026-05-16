@@ -6,9 +6,10 @@ from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
+from django.core.files.base import ContentFile
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from charging.models import ChargingSession, MonthlyReport, Tariff
@@ -112,6 +113,56 @@ class ReportsViewListingTests(TestCase):
         self.assertEqual(len(entries), 1)
         self.assertIsNone(entries[0]["report"])
         self.assertFalse(entries[0]["has_pdf"])
+
+
+@override_settings(MEDIA_ROOT="/tmp/wallbox-test-media-reports-ui")
+class ReportsInlinePdfViewerTests(TestCase):
+    """Phase 2.9: the most-recent PDF embeds as an iframe at the page top."""
+
+    def setUp(self):
+        self.user = _make_staff_user()
+        self.client.force_login(self.user)
+
+    def test_no_iframe_when_no_pdf_exists(self):
+        response = self.client.get(reverse("reports_index"))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "<iframe")
+        self.assertIsNone(response.context["latest_report"])
+
+    def test_iframe_points_at_latest_report_pdf(self):
+        # Without an attached PDF the report row exists but iframe should
+        # still be skipped — viewer is only useful when there's a real PDF.
+        report_no_pdf = MonthlyReport.objects.create(
+            year=2026,
+            month=3,
+            wallbox_kwh_total=Decimal("1.000"),
+            energy_cost_eur=Decimal("0.39"),
+            total_amount_eur=Decimal("0.39"),
+        )
+        response = self.client.get(reverse("reports_index"))
+        self.assertIsNone(response.context["latest_report"])
+        self.assertNotContains(response, "<iframe")
+
+        # Attach a PDF to a newer report → iframe shows up pointing at it.
+        report_with_pdf = MonthlyReport.objects.create(
+            year=2026,
+            month=5,
+            wallbox_kwh_total=Decimal("4.000"),
+            energy_cost_eur=Decimal("1.54"),
+            total_amount_eur=Decimal("1.54"),
+        )
+        report_with_pdf.pdf.save("dummy.pdf", ContentFile(b"%PDF-1.4 dummy"))
+
+        response = self.client.get(reverse("reports_index"))
+        self.assertContains(response, "<iframe")
+        self.assertEqual(
+            response.context["latest_report"].pk, report_with_pdf.pk
+        )
+        self.assertContains(response, report_with_pdf.pdf.url)
+        # And the older PDF-less report from setUp is NOT what's embedded.
+        self.assertNotEqual(
+            response.context["latest_report"].pk, report_no_pdf.pk
+        )
 
 
 class ReportsViewGenerateTests(TestCase):

@@ -56,6 +56,11 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+# Allow same-origin iframes so the Reports page can embed its own PDFs.
+# Django's default is "DENY" which silently breaks the inline PDF viewer
+# even though the PDF response is served from this same Django process.
+X_FRAME_OPTIONS = "SAMEORIGIN"
+
 ROOT_URLCONF = 'wallbox_project.urls'
 
 TEMPLATES = [
