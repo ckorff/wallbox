@@ -1,3 +1,4 @@
+"""Tests for the REST API client, JSON ingest path, and key archival."""
 import json
 import stat
 import tempfile
@@ -15,99 +16,11 @@ from charging.keba_api import (
     KebaAuthError,
     KebaTruncatedError,
 )
-from charging.keba_csv import parse_sessions_csv
 from charging.models import ChargingSession
-from charging.services import ingest_csv_row, ingest_json_row
+from charging.services import ingest_json_row
 
 
-SAMPLE_CSV = (
-    "Charging Station ID;Serial;RFID Card;Status;Start;End;Duration (s);"
-    "Meter at start (Wh);Meter at end (Wh);Consumption (kWh)\r\n"
-    "1;34416115;predefinedTokenId;CLOSED;07-05-2026 15:33:35;"
-    "07-05-2026 19:18:53;13518;154.9;27797.0;27.64\r\n"
-    "1;34416115;044115CA911E94;CLOSED;07-05-2026 15:31:39;"
-    "07-05-2026 15:32:14;34;154.9;154.9;0\r\n"
-)
 BERLIN = ZoneInfo("Europe/Berlin")
-
-
-class ParseSessionsCsvTests(TestCase):
-    def test_parses_two_rows_with_expected_columns(self):
-        rows = parse_sessions_csv(SAMPLE_CSV)
-
-        self.assertEqual(len(rows), 2)
-        first = rows[0]
-        self.assertEqual(first["Serial"], "34416115")
-        self.assertEqual(first["Start"], "07-05-2026 15:33:35")
-        self.assertEqual(first["End"], "07-05-2026 19:18:53")
-        self.assertEqual(first["Consumption (kWh)"], "27.64")
-        self.assertEqual(first["Status"], "CLOSED")
-
-    def test_returns_empty_for_empty_input(self):
-        self.assertEqual(parse_sessions_csv(""), [])
-
-    def test_returns_empty_when_only_header_present(self):
-        header_only = SAMPLE_CSV.split("\r\n", 1)[0] + "\r\n"
-
-        self.assertEqual(parse_sessions_csv(header_only), [])
-
-
-class IngestCsvRowTests(TestCase):
-    def _row(self, **overrides):
-        base = {
-            "Charging Station ID": "1",
-            "Serial": "34416115",
-            "RFID Card": "044115CA911E94",
-            "Status": "CLOSED",
-            "Start": "07-05-2026 15:33:35",
-            "End": "07-05-2026 19:18:53",
-            "Duration (s)": "13518",
-            "Meter at start (Wh)": "154.9",
-            "Meter at end (Wh)": "27797.0",
-            "Consumption (kWh)": "27.64",
-        }
-        base.update(overrides)
-        return base
-
-    def test_creates_new_session(self):
-        row = self._row()
-
-        obj, created = ingest_csv_row(row)
-
-        self.assertTrue(created)
-        self.assertEqual(obj.serial, "34416115")
-        self.assertEqual(obj.energy_kwh, Decimal("27.640"))
-        self.assertEqual(
-            obj.started_at,
-            datetime(2026, 5, 7, 15, 33, 35, tzinfo=BERLIN),
-        )
-        self.assertEqual(
-            obj.ended_at,
-            datetime(2026, 5, 7, 19, 18, 53, tzinfo=BERLIN),
-        )
-        self.assertEqual(obj.raw_row, row)
-
-    def test_re_import_updates_existing_row(self):
-        ingest_csv_row(self._row())
-
-        obj, created = ingest_csv_row(self._row(**{"Consumption (kWh)": "27.65"}))
-
-        self.assertFalse(created)
-        self.assertEqual(obj.energy_kwh, Decimal("27.650"))
-        self.assertEqual(ChargingSession.objects.count(), 1)
-
-    def test_skips_zero_kwh_touch_session(self):
-        obj, created = ingest_csv_row(self._row(**{"Consumption (kWh)": "0"}))
-
-        self.assertIsNone(obj)
-        self.assertFalse(created)
-        self.assertEqual(ChargingSession.objects.count(), 0)
-
-    def test_skips_zero_kwh_with_decimal_zero(self):
-        obj, created = ingest_csv_row(self._row(**{"Consumption (kWh)": "0.000"}))
-
-        self.assertIsNone(obj)
-        self.assertFalse(created)
 
 
 def _login_body(access="ACC", refresh="REF"):

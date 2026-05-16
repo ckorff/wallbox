@@ -1,10 +1,10 @@
-"""Service entry point for KEBA session imports.
+"""Service entry point for the manual KEBA session import.
 
-Wraps the REST-API fetch + per-row ingest pipeline so it can be called
-from both the ``keba_import`` management command and the dashboard
-"Run import now" button without duplicating logic. The live path uses
-``/v2/sessions`` (JSON, MVA records included); ``--file`` keeps the
-legacy CSV path for hand-downloaded exports.
+Wraps the REST-API fetch + per-row ingest pipeline so the
+``keba_import`` management command and the dashboard "Run import now"
+button share one implementation. The everyday path is the dashboard
+auto-import (`charging.services.auto_import`); this module backs the
+manual override.
 """
 from __future__ import annotations
 
@@ -17,9 +17,8 @@ from zoneinfo import ZoneInfo
 
 from django.conf import settings
 
-from charging.keba_csv import parse_sessions_csv
 from charging.models import AppSettings
-from charging.services import ingest_csv_row, ingest_json_row
+from charging.services import ingest_json_row
 from charging.services.keba_client import build_keba_client
 from charging.services.wallbox_key import ensure_wallbox_key_archived
 
@@ -37,51 +36,25 @@ class ImportResult:
 
 
 def run_keba_import(
-    *,
-    file: Path | None = None,
-    log: Callable[[str], None] | None = None,
+    *, log: Callable[[str], None] | None = None
 ) -> ImportResult:
-    """Fetch wallbox sessions and upsert them.
+    """Fetch sessions from /v2/sessions and upsert them.
 
-    With ``file``, ingest a hand-downloaded CSV (no MVA data). Without,
-    pull from ``/v2/sessions`` over the REST API (MVA records included).
     Exceptions from the API client or parsing propagate to the caller —
     the management command turns them into ``CommandError``, the
-    dashboard view catches them for a flash message.
-
-    Pass ``log`` to receive progress messages (one per stage and per row).
+    dashboard view catches them for a flash message. Pass ``log`` to
+    receive progress messages (one per stage and per row).
     """
     say = log or (lambda _: None)
-
-    if file is not None:
-        result = _import_from_csv_file(file, say)
-    else:
-        result = _import_from_api(say)
+    result = _import_from_api(say)
 
     # Stamp the dashboard's "Last imported" indicator on successful return.
-    # An exception raised by the inner functions skips this — partial or
+    # An exception raised by _import_from_api skips this — partial or
     # failed imports must not look "fresh" on the dashboard.
     app = AppSettings.current()
     app.last_import_at = datetime.now(tz=timezone.utc)
     app.save()
 
-    return result
-
-
-def _import_from_csv_file(
-    file: Path, say: Callable[[str], None]
-) -> ImportResult:
-    say(f"Reading CSV from file: {file}")
-    text = file.read_text(encoding="utf-8")
-    rows = parse_sessions_csv(text)
-    say(f"Parsed {len(rows)} row(s) from CSV")
-
-    result = ImportResult(rows_seen=len(rows))
-    for row in rows:
-        obj, was_created = ingest_csv_row(row)
-        start = row.get("Start", "?")
-        kwh = row.get("Consumption (kWh)", "?")
-        _record(result, say, obj, was_created, start, kwh)
     return result
 
 
@@ -100,6 +73,8 @@ def _import_from_api(say: Callable[[str], None]) -> ImportResult:
             say(f"Wallbox MVA public key archived → {key_path}")
 
     if settings.KEBA_DUMP_DIR:
+        # Diagnostic tee for the flaky-WLAN case — captures the raw API
+        # response so a malformed import can be replayed offline.
         dump_dir = Path(settings.KEBA_DUMP_DIR)
         dump_dir.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now().strftime("%Y%m%dT%H%M%S")

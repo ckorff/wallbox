@@ -1,11 +1,9 @@
-"""Persistence helpers for KEBA wallbox session rows.
+"""Persistence helper for KEBA wallbox session rows.
 
-The CSV path (`ingest_csv_row`) handles hand-downloaded exports via
-`--file`. The JSON path (`ingest_json_row`) handles the live import
-from /v2/sessions, including MVA-signed records. Both upsert on the
-same (serial, started_at) natural key, so a session first imported
-via CSV gains its MVA fields the next time it's re-fetched via the
-API path.
+``ingest_json_row`` upserts one entry from ``/v2/sessions`` on the
+natural key ``(serial, started_at)``. MVA-signed records are stored
+verbatim — re-parsing them would invalidate the wallbox's ECDSA
+signature, so the raw JSON strings are kept exactly as received.
 """
 from __future__ import annotations
 
@@ -18,19 +16,12 @@ from charging.models import ChargingSession
 
 _KWH_QUANT = Decimal("0.001")
 _BERLIN = ZoneInfo("Europe/Berlin")
-_DATE_FMT = "%d-%m-%Y %H:%M:%S"
-
-
-def _parse_local(value: str) -> datetime | None:
-    value = (value or "").strip()
-    if not value:
-        return None
-    return datetime.strptime(value, _DATE_FMT).replace(tzinfo=_BERLIN)
 
 
 def _epoch_ms_to_berlin(ms) -> datetime | None:
-    # Microseconds stripped so the (serial, started_at) natural key keeps
-    # matching across paths — CSV is second-precision, JSON has sub-second.
+    # Sub-second precision stripped so the (serial, started_at) natural
+    # key stays stable across re-imports — the wallbox occasionally
+    # returns slightly different microsecond values for the same session.
     if not ms:
         return None
     return (
@@ -40,34 +31,13 @@ def _epoch_ms_to_berlin(ms) -> datetime | None:
     )
 
 
-def ingest_csv_row(row: dict):
-    """Upsert a ChargingSession from one parsed CSV row.
-
-    Returns ``(instance, created)`` for billable rows, or ``(None, False)``
-    for 0 kWh "touch" sessions (RFID swipe without charging).
-    """
-    energy_kwh = Decimal(row["Consumption (kWh)"]).quantize(_KWH_QUANT)
-    if energy_kwh == 0:
-        return None, False
-
-    return ChargingSession.objects.update_or_create(
-        serial=row["Serial"],
-        started_at=_parse_local(row["Start"]),
-        defaults={
-            "ended_at": _parse_local(row["End"]),
-            "energy_kwh": energy_kwh,
-            "raw_row": row,
-        },
-    )
-
-
 def ingest_json_row(row: dict):
     """Upsert a ChargingSession from one /v2/sessions JSON entry.
 
     Returns ``(instance, created)`` for billable rows, or ``(None, False)``
-    for 0 kWh "touch" sessions (RFID swipe without charging). MVA records,
-    when present, are stored verbatim — re-parsing would invalidate the
-    cryptographic signature.
+    for 0 kWh "touch" sessions (RFID swipe without charging) — those are
+    deliberately not persisted, since they have no cost and would inflate
+    the wallbox-vs-DB count comparison the dashboard auto-import uses.
     """
     energy_kwh = Decimal(str(row["energyConsumedInKwh"])).quantize(_KWH_QUANT)
     if energy_kwh == 0:

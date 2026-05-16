@@ -1,30 +1,24 @@
-"""Import charging sessions from the KEBA wallbox CSV export.
+"""Fetch charging sessions from the KEBA wallbox over its REST API.
 
-By default fetches over HTTP from the configured wallbox; ``--file`` reads
-a local CSV instead (handy for testing against a known good export).
+Pre-Phase-3 this command was the primary import mechanism. The dashboard
+auto-import (see ``charging.services.auto_import``) now handles the
+common case automatically; this CLI stays useful for cron-free ad-hoc
+imports, debugging via ``-v 2`` and the ``KEBA_DUMP_DIR=…`` tee for
+inspecting the raw API response.
 """
-from pathlib import Path
-
 from django.core.management.base import BaseCommand, CommandError
 
 from charging.services.import_runner import run_keba_import
 
 
 class Command(BaseCommand):
-    help = "Fetch the KEBA charging-session CSV and upsert ChargingSession rows."
-
-    def add_arguments(self, parser):
-        parser.add_argument(
-            "--file",
-            type=Path,
-            help="Read CSV from a local file instead of fetching over the API.",
-        )
+    help = "Fetch the latest KEBA wallbox sessions and upsert ChargingSession rows."
 
     def handle(self, *args, **options):
         verbosity = options.get("verbosity", 1)
         log = self.stdout.write if verbosity >= 2 else None
         try:
-            result = run_keba_import(file=options["file"], log=log)
+            result = run_keba_import(log=log)
         except RuntimeError as exc:
             raise CommandError(str(exc))
 

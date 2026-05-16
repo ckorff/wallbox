@@ -211,7 +211,6 @@ source .venv/bin/activate
 sudo systemctl restart wallbox                           # apply code/template changes (service is the runtime)
 journalctl -u wallbox -f                                 # tail web-UI logs
 python manage.py keba_import                             # fetch + ingest live wallbox sessions
-python manage.py keba_import --file <path.csv>           # ingest a CSV downloaded by hand
 python manage.py keba_import -v 2                        # verbose: per-stage + per-row outcomes
 KEBA_DUMP_DIR=debug python manage.py keba_import         # tee the raw HTTP body to debug/ for inspection
 python manage.py generate_report --year 2026 --month 5   # CLI alternative to the UI button
@@ -324,12 +323,17 @@ highlighted.
 
    Active-card glow pattern: on each page the action the user is most
    likely to use gets `border-accent shadow-glow`; other cards stay on
-   the neutral `border-[rgba(94,234,255,0.10)]`. On the dashboard this
-   is "Run import now".
+   the neutral `border-[rgba(94,234,255,0.10)]`. On the dashboard, the
+   live-state card picks up the glow while the wallbox is `CHARGING`
+   or `ERROR` (so the user's attention follows the wallbox); otherwise
+   no card is promoted, because auto-import handles the common case
+   and "Run import now" is a manual override styled the same as
+   "Open latest report".
 
-The "Run import now" button is intentionally synchronous for now – it
-blocks for a few seconds while the wallbox is queried. Async/queued
-imports are a Phase 3 concern.
+The "Run import now" button is intentionally synchronous — it blocks
+for a few seconds while the wallbox is queried. It exists only as a
+manual override; the per-pageload auto-import (see
+`charging/services/auto_import.py`) pulls new sessions on its own.
 
 ## PDF layout (English, professional, A4 portrait)
 - Header block:
