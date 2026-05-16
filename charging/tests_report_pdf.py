@@ -224,7 +224,7 @@ class EichrechtPdfTests(TestCase):
             energy_price_ct_per_kwh=Decimal("38.500"),
         )
         ChargingSession.objects.create(
-            serial="34416115",
+            serial="00000000",
             started_at=_dt(2026, 5, 5, 9, 30),
             ended_at=_dt(2026, 5, 5, 10, 30),
             energy_kwh=Decimal("4.000"),
@@ -233,7 +233,7 @@ class EichrechtPdfTests(TestCase):
             mva_record_signature='{"SD":"3046..."}',
         )
         ChargingSession.objects.create(
-            serial="34416115",
+            serial="00000000",
             started_at=_dt(2026, 5, 17, 19, 15),
             ended_at=_dt(2026, 5, 17, 20, 30),
             energy_kwh=Decimal("6.500"),
@@ -245,7 +245,7 @@ class EichrechtPdfTests(TestCase):
     def _archive_test_key(self, hex_key="3059ABCD"):
         (self.media / "wallbox_mva_public_key.json").write_text(
             json.dumps(
-                {"wallbox_serial": "34416115", "public_key_hex": hex_key}
+                {"wallbox_serial": "00000000", "public_key_hex": hex_key}
             )
         )
 
@@ -273,7 +273,7 @@ class EichrechtPdfTests(TestCase):
         html = self._render_html(report)
 
         self.assertIn("Eichrecht", html)
-        self.assertIn("34416115", html)
+        self.assertIn("00000000", html)
         expected_fp = hashlib.sha256(b"3059ABCD").hexdigest()
         self.assertIn(expected_fp, html)
 

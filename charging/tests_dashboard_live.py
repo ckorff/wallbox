@@ -11,7 +11,7 @@ from django.test import TestCase, override_settings
 from charging.services.wallbox_state import fetch_live_state
 
 
-def _write_archived_key(media_root: Path, serial: str = "34416115") -> None:
+def _write_archived_key(media_root: Path, serial: str = "00000000") -> None:
     media_root.mkdir(parents=True, exist_ok=True)
     (media_root / "wallbox_mva_public_key.json").write_text(
         json.dumps({"wallbox_serial": serial, "public_key_hex": "deadbeef"})
@@ -67,7 +67,7 @@ class FetchLiveStateTests(TestCase):
         self.assertEqual(view.state, "IDLE")
         self.assertIsNone(view.power_w)
         self.assertFalse(view.stale)
-        client.get_state.assert_called_once_with("34416115")
+        client.get_state.assert_called_once_with("00000000")
         client.get_wallbox_info.assert_not_called()
 
     def test_charging_pulls_power_from_wallbox_info(self):
@@ -86,7 +86,7 @@ class FetchLiveStateTests(TestCase):
 
         self.assertEqual(view.state, "CHARGING")
         self.assertEqual(view.power_w, 11023)
-        client.get_wallbox_info.assert_called_once_with("34416115")
+        client.get_wallbox_info.assert_called_once_with("00000000")
 
     def test_unreachable_with_no_cache_returns_unreachable_reason(self):
         _write_archived_key(self.media_root)

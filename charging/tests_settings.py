@@ -188,7 +188,7 @@ class SettingsPageTests(TestCase):
     def test_eichrecht_archived_renders_serial_and_fingerprint(self):
         archived_view = {
             "archived": True,
-            "serial": "34416115",
+            "serial": "00000000",
             "fingerprint": "deadbeef" * 8,
             "firmware_version": "P30 v 3.10.80",
             "dip_switch_settings": [False, False, True],
@@ -199,14 +199,14 @@ class SettingsPageTests(TestCase):
             return_value=archived_view,
         ):
             response = self.client.get(self.url)
-        self.assertContains(response, "34416115")
+        self.assertContains(response, "00000000")
         self.assertContains(response, "deadbeef" * 8)
         self.assertContains(response, "P30 v 3.10.80")
 
     def test_eichrecht_live_fetch_error_renders_warning(self):
         partial = {
             "archived": True,
-            "serial": "34416115",
+            "serial": "00000000",
             "fingerprint": "deadbeef" * 8,
             "firmware_version": None,
             "dip_switch_settings": None,
@@ -218,7 +218,7 @@ class SettingsPageTests(TestCase):
         ):
             response = self.client.get(self.url)
         # Serial + fingerprint still appear (archived data).
-        self.assertContains(response, "34416115")
+        self.assertContains(response, "00000000")
         # Warning surfaces the underlying error class/message.
         self.assertContains(response, "Wallbox unreachable")
         self.assertContains(response, "TimeoutError")

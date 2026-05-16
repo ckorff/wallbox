@@ -6,15 +6,15 @@ used in earlier versions. Discovered and verified on 14–15 May 2026.
 
 For anything not covered here, fall back to the **on-board** docs:
 
-- Swagger UI: `https://192.168.1.12:8443/docs`
-- OpenAPI spec (JSON): `https://192.168.1.12:8443/openapi_orig.json`
+- Swagger UI: `https://192.168.0.10:8443/docs`
+- OpenAPI spec (JSON): `https://192.168.0.10:8443/openapi_orig.json`
 
 The on-board docs are complete and authoritative – the API is otherwise
 not publicly documented by KEBA.
 
 ## Overview
 
-- **Base URL:** `https://192.168.1.12:8443` (kept in `.env` as `KEBA_API_URL`)
+- **Base URL:** `https://192.168.0.10:8443` (kept in `.env` as `KEBA_API_URL`)
 - **Protocol:** HTTPS only, self-signed certificate
 - **API identifier:** "KeMove REST API", version visible at `GET /version` (currently `2.4.1`)
 - **Implementation on the wallbox:** Python / Flask (Werkzeug-style 404s)
@@ -91,8 +91,8 @@ Returns the same semicolon-separated CSV format that the legacy
 
 ```
 Charging Station ID;Serial;RFID Card;Status;Start;End;Duration (s);Meter at start (Wh);Meter at end (Wh);Consumption (kWh)
-1;34416115;predefinedTokenId;CLOSED;13-05-2026 23:32:06;14-05-2026 10:00:14;37688;58189.2;109759.9;51.57
-1;34416115;044115CA911E94;CLOSED;13-05-2026 23:30:16;13-05-2026 23:30:22;6;58189.2;58189.2;0
+1;00000000;predefinedTokenId;CLOSED;13-05-2026 23:32:06;14-05-2026 10:00:14;37688;58189.2;109759.9;51.57
+1;00000000;04AABBCCDDEEFF;CLOSED;13-05-2026 23:30:16;13-05-2026 23:30:22;6;58189.2;58189.2;0
 ...
 ```
 
@@ -110,7 +110,7 @@ records for Eichrecht compliance (see ROADMAP Phase 2.7):
   "sessions": [
     {
       "id": 591466681,
-      "wallboxSerialNumber": "34416115",
+      "wallboxSerialNumber": "00000000",
       "tokenId": "predefinedTokenId",
       "status": "CLOSED",
       "terminationReason": "UNPLUG_EV",
@@ -121,7 +121,7 @@ records for Eichrecht compliance (see ROADMAP Phase 2.7):
       "endingMeterValue": 109759900,
       "energyConsumed": 51570700,
       "energyConsumedInKwh": 51.5707,
-      "mvaRecordData": "{\"FV\":\"1.1\",\"GI\":\"KEBA_KCP30\",\"GS\":\"34416115\",...}",
+      "mvaRecordData": "{\"FV\":\"1.1\",\"GI\":\"KEBA_KCP30\",\"GS\":\"00000000\",...}",
       "mvaRecordSignature": "{\"SD\":\"3046022100B47A24F231...\"}",
       "tariffModel": "PerEnergyConsumed"
     }
@@ -163,7 +163,7 @@ from the list endpoint and filter by ID.
 
 ```json
 {
-  "serialNumber": "34416115",
+  "serialNumber": "00000000",
   "model": "KC-P30-EC2204B2-L0R-CC",
   "firmwareVersion": "P30 v 3.10.80 (251002-115400) : ML v 2.9.2",
   "macAddress": "00:60:B5:64:88:6E",

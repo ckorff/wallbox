@@ -86,12 +86,12 @@ class KebaApiClientTests(TestCase):
         mock_req.return_value = (200, {}, b'{"state":"IDLE"}')
 
         client = self._client()
-        result = client.get_state("34416115")
+        result = client.get_state("00000000")
 
         self.assertEqual(result, {"state": "IDLE"})
         mock_req.assert_called_once()
         call = mock_req.call_args
-        self.assertEqual(call.args, ("GET", "/v2/wallboxes/34416115/state"))
+        self.assertEqual(call.args, ("GET", "/v2/wallboxes/00000000/state"))
         self.assertEqual(call.kwargs.get("auth"), "Bearer CACHED")
 
     @patch("charging.keba_api.KebaApiClient._request")
@@ -104,7 +104,7 @@ class KebaApiClientTests(TestCase):
         ]
 
         client = self._client()
-        result = client.get_state("34416115")
+        result = client.get_state("00000000")
 
         self.assertEqual(result, {"state": "IDLE"})
         self.assertEqual(mock_req.call_count, 3)
@@ -130,7 +130,7 @@ class KebaApiClientTests(TestCase):
         ]
 
         client = self._client()
-        result = client.get_state("34416115")
+        result = client.get_state("00000000")
 
         self.assertEqual(result, {"state": "IDLE"})
         self.assertEqual(mock_req.call_count, 4)
@@ -151,12 +151,12 @@ class KebaApiClientTests(TestCase):
 
         client = self._client()
         with self.assertRaises(KebaAuthError):
-            client.get_state("34416115")
+            client.get_state("00000000")
 
     @patch("charging.keba_api.KebaApiClient._request")
     def test_export_sessions_csv_returns_bytes(self, mock_req):
         self._seed_cache()
-        body = b"Charging Station ID;Serial\r\n1;34416115\r\n"
+        body = b"Charging Station ID;Serial\r\n1;00000000\r\n"
         mock_req.return_value = (
             200,
             {"Content-Length": str(len(body))},
@@ -188,7 +188,7 @@ class KebaApiClientTests(TestCase):
     def test_export_no_content_length_skips_check(self, mock_req):
         # Chunked responses have no Content-Length; don't fake a check.
         self._seed_cache()
-        body = b"Charging Station ID;Serial\r\n1;34416115\r\n"
+        body = b"Charging Station ID;Serial\r\n1;00000000\r\n"
         mock_req.return_value = (200, {}, body)
 
         client = self._client()
@@ -198,18 +198,18 @@ class KebaApiClientTests(TestCase):
     def test_get_wallbox_info_returns_dict(self, mock_req):
         self._seed_cache()
         info = {
-            "serialNumber": "34416115",
+            "serialNumber": "00000000",
             "state": "IDLE",
             "mvaPublicKey": "{\"UK\":\"...\"}",
         }
         mock_req.return_value = (200, {}, json.dumps(info).encode("utf-8"))
 
         client = self._client()
-        result = client.get_wallbox_info("34416115")
+        result = client.get_wallbox_info("00000000")
 
         self.assertEqual(result, info)
         call = mock_req.call_args
-        self.assertEqual(call.args, ("GET", "/v2/wallboxes/34416115"))
+        self.assertEqual(call.args, ("GET", "/v2/wallboxes/00000000"))
 
     @patch("charging.keba_api.KebaApiClient._request")
     def test_list_sessions_returns_sessions_array(self, mock_req):
@@ -219,7 +219,7 @@ class KebaApiClientTests(TestCase):
                 "sessions": [
                     {
                         "id": 1,
-                        "wallboxSerialNumber": "34416115",
+                        "wallboxSerialNumber": "00000000",
                         "startDate": 1778707926397,
                         "endDate": 1778745614889,
                         "energyConsumedInKwh": 51.5707,
@@ -233,7 +233,7 @@ class KebaApiClientTests(TestCase):
         result = client.list_sessions()
 
         self.assertEqual(len(result), 1)
-        self.assertEqual(result[0]["wallboxSerialNumber"], "34416115")
+        self.assertEqual(result[0]["wallboxSerialNumber"], "00000000")
         call = mock_req.call_args
         self.assertEqual(call.args, ("GET", "/v2/sessions"))
 
@@ -244,8 +244,8 @@ class IngestJsonRowTests(TestCase):
     def _row(self, **overrides):
         base = {
             "id": 591466681,
-            "wallboxSerialNumber": "34416115",
-            "tokenId": "044115CA911E94",
+            "wallboxSerialNumber": "00000000",
+            "tokenId": "04AABBCCDDEEFF",
             "status": "CLOSED",
             "startDate": 1778707926397,   # 2026-05-13 23:32:06.397 CEST
             "endDate": 1778745614889,     # 2026-05-14 10:00:14.889 CEST
@@ -263,7 +263,7 @@ class IngestJsonRowTests(TestCase):
         obj, created = ingest_json_row(row)
 
         self.assertTrue(created)
-        self.assertEqual(obj.serial, "34416115")
+        self.assertEqual(obj.serial, "00000000")
         self.assertEqual(obj.energy_kwh, Decimal("27.640"))
         # Microseconds stripped so the (serial, started_at) natural key
         # aligns with the CSV path's second-precision timestamps.
@@ -339,22 +339,22 @@ class WallboxKeyTests(TestCase):
 
         client = Mock()
         client.get_wallbox_info.return_value = {
-            "serialNumber": "34416115",
+            "serialNumber": "00000000",
             "mvaPublicKey": '{"UK":"3059301306072A8648CE3D"}',
         }
 
         record = ensure_wallbox_key_archived(
-            client, "34416115", path=self.key_path
+            client, "00000000", path=self.key_path
         )
 
-        self.assertEqual(record["wallbox_serial"], "34416115")
+        self.assertEqual(record["wallbox_serial"], "00000000")
         self.assertEqual(record["public_key_hex"], "3059301306072A8648CE3D")
         self.assertTrue(self.key_path.exists())
-        client.get_wallbox_info.assert_called_once_with("34416115")
+        client.get_wallbox_info.assert_called_once_with("00000000")
 
         # Second call: read from disk, no additional API hit.
         again = ensure_wallbox_key_archived(
-            client, "34416115", path=self.key_path
+            client, "00000000", path=self.key_path
         )
 
         self.assertEqual(again, record)
@@ -366,10 +366,10 @@ class WallboxKeyTests(TestCase):
         from charging.services.wallbox_key import ensure_wallbox_key_archived
 
         client = Mock()
-        client.get_wallbox_info.return_value = {"serialNumber": "34416115"}
+        client.get_wallbox_info.return_value = {"serialNumber": "00000000"}
 
         result = ensure_wallbox_key_archived(
-            client, "34416115", path=self.key_path
+            client, "00000000", path=self.key_path
         )
 
         self.assertIsNone(result)

@@ -29,11 +29,11 @@ Die Phasen bauen aufeinander auf. Empfohlene Reihenfolge:
 
 - Git-Tag setzen: `git tag -a v0.2-csv-scrape -m "Last version before REST API migration"`
 - DB-Snapshot: `cp db.sqlite3 db.sqlite3.pre-api`
-- Neue Datei `docs/keba_api.md` mit den Endpunkten, die wir nutzen, dem Auth-Flow (JWT mit accessToken 15 min, refreshToken 30 Tage) und den TLS-Hinweisen (self-signed Cert). Die vollständige Swagger-UI bleibt für Detail-Recherche auf der Wallbox unter `https://192.168.1.12:8443/docs` erreichbar.
+- Neue Datei `docs/keba_api.md` mit den Endpunkten, die wir nutzen, dem Auth-Flow (JWT mit accessToken 15 min, refreshToken 30 Tage) und den TLS-Hinweisen (self-signed Cert). Die vollständige Swagger-UI bleibt für Detail-Recherche auf der Wallbox unter `https://192.168.0.10:8443/docs` erreichbar.
 
 ### Konfiguration
 
-- `.env` erweitert um: `KEBA_API_URL=https://192.168.1.12:8443`, `KEBA_API_VERIFY_TLS=false`
+- `.env` erweitert um: `KEBA_API_URL=https://192.168.0.10:8443`, `KEBA_API_VERIFY_TLS=false`
 - `KEBA_API_USERNAME` und `KEBA_API_PASSWORD` zunächst auch in `.env`; in Phase 2.8 verlagern wir sie in die Settings-UI
 
 ### Implementierung
@@ -91,7 +91,7 @@ Die Phasen bauen aufeinander auf. Empfohlene Reihenfolge:
 - Footer-Block ergänzen:
 
   > Charging session data is signed by the KEBA KeContact P30 wallbox (MVA, Eichrecht-compliant).  
-  > Wallbox serial: `34416115`. Public key fingerprint: `<SHA-256>`.  
+  > Wallbox serial: `00000000`. Public key fingerprint: `<SHA-256>`.  
   > Original signed records available on request.
 
 - Pro Zeile in der Sessions-Tabelle ein kleines „✓"-Symbol, wenn ein `mva_record_signature` vorhanden ist
