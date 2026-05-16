@@ -61,8 +61,8 @@ signature data is preserved in the DB if HR ever asks.
 Tariff settings expanded into a `/settings/` hub with four sections:
 Tariff, Wallbox API (encrypted-at-rest credentials), Report recipient
 (consumed by Phase 3), and a read-only Eichrecht info block (serial,
-public-key fingerprint, plus live-fetched firmware version and DIP
-state). API credentials live in the `AppSettings` singleton;
+public-key fingerprint, plus live-fetched firmware version). API
+credentials live in the `AppSettings` singleton;
 `charging/services/keba_client.py` picks DB-over-`.env`, with `.env`
 retained as fallback for CLI runs that never touched the UI.
 
@@ -300,7 +300,7 @@ highlighted.
    - **Report recipient** (`#report-recipient`): email for the
      monthly PDF send
    - **Eichrecht info** (`#eichrecht`, read-only): wallbox serial,
-     public-key fingerprint, live-fetched firmware + DIP state with
+     public-key fingerprint, live-fetched firmware version with
      graceful "unreachable" fallback
 3. **Reports** at `/reports/`
 4. Plain server-rendered Django templates. No SPA, no JS framework.

@@ -174,12 +174,6 @@
             {% if eichrecht.firmware_version %}{{ eichrecht.firmware_version }}{% else %}<span class="text-text-muted">—</span>{% endif %}
           </dd>
         </div>
-        <div class="flex gap-4">
-          <dt class="w-44 text-text-muted shrink-0">DIP switches</dt>
-          <dd class="text-text-primary font-mono break-all">
-            {% if eichrecht.dip_switch_settings is not None %}{{ eichrecht.dip_switch_settings }}{% else %}<span class="text-text-muted">—</span>{% endif %}
-          </dd>
-        </div>
       </dl>
       {% if eichrecht.live_fetch_error %}
         <p class="text-amber-300 text-sm mt-4 flex items-start gap-2">

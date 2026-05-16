@@ -179,20 +179,18 @@ from the list endpoint and filter by ID.
     "lines": [...],
     "temperature": 1962
   },
-  "mvaPublicKey": "{\"UK\":\"3059301306072A8648CE3D...\"}",
-  "dipSwitchSettings": [false,false,true,false,false,true,...]
+  "mvaPublicKey": "{\"UK\":\"3059301306072A8648CE3D...\"}"
 }
 ```
 
 Notes:
 
 - `ipAddress` here is the wallbox's **internal management IP**, not the customer LAN address
-- `maxCurrent` is in mA, mirrors the DIP switch state (13000 = 13 A)
+- `maxCurrent` is in mA (13000 = 13 A)
 - `meter.temperature` is in 1/100 °C (1962 → 19.62 °C)
 - `meter.*` fields use milli-units on the wire — see "Units on the wire" below
 - `mvaPublicKey` is the wallbox's Eichrecht public key — archive it once
   to `media/wallbox_mva_public_key.json` in Phase 2.7 (see `ROADMAP.md`)
-- `dipSwitchSettings` is a raw 16-element boolean array; use `/v2/wallboxes/dipswitch/{serial}` for the parsed version
 
 #### Units on the wire
 
@@ -226,29 +224,6 @@ otherwise.
 Returns in ~50 ms. Suitable for every dashboard pageload. Known values:
 `IDLE`, `CHARGING`, `ERROR`. Other values may exist; treat unknowns as a
 display-only string.
-
-#### `GET /v2/wallboxes/dipswitch/{serialNumber}` — parsed DIP state
-
-```json
-{
-  "smartHomeInterface": true,
-  "current": 13,
-  "commisioningMode": false,
-  "externalEnableX1": false,
-  "externalEnableX2": false,
-  "communicationHubMode": false,
-  "deactivatePlcModem": false,
-  "chargingSessionMode": false,
-  "ds14": false,
-  "ds15": false,
-  "ipAddress": "192.168.25.10"
-}
-```
-
-Useful for confirming hardware configuration (max current, smart-home
-interface state) without physically opening the wallbox. Note that
-`commisioningMode` is misspelled in the API response — preserve the typo
-in any DTO; the API will not change it.
 
 ### Configuration
 
@@ -330,8 +305,6 @@ The existing scrape is tested by patching
 - **30-day refresh token expiry.** If `keba_import` doesn't run for 30 days,
   the cached refresh token is dead. Always fall back to full login on
   refresh failure.
-- **DIP switch state can be stale.** The wallbox reads DIP only at startup.
-  Flipping switches without rebooting → API reports the old state.
 - **`/v2/sessions/{id}` is leaner than `/v2/sessions`.** Counter-intuitive
   but real. Use the list endpoint when you need MVA records.
 - **`commisioningMode` is misspelled.** Preserve the typo.

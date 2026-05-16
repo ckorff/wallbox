@@ -68,10 +68,9 @@ def fetch_wallbox_status() -> dict:
     """Build the display dict for the Settings page's Eichrecht block.
 
     Combines on-disk archived data (serial + public key) with a live API
-    call for firmware version and DIP-switch state. Gracefully degrades
-    when the wallbox is unreachable or credentials are missing — the
-    archived fields still render, and a warning explains why the live
-    fields are missing.
+    call for firmware version. Gracefully degrades when the wallbox is
+    unreachable or credentials are missing — the archived fields still
+    render, and a warning explains why the live fields are missing.
     """
     from charging.services.keba_client import build_keba_client
 
@@ -82,7 +81,6 @@ def fetch_wallbox_status() -> dict:
             "serial": None,
             "fingerprint": None,
             "firmware_version": None,
-            "dip_switch_settings": None,
             "live_fetch_error": None,
         }
 
@@ -91,14 +89,12 @@ def fetch_wallbox_status() -> dict:
         "serial": archived["wallbox_serial"],
         "fingerprint": public_key_fingerprint(archived),
         "firmware_version": None,
-        "dip_switch_settings": None,
         "live_fetch_error": None,
     }
     try:
         client = build_keba_client()
         info = client.get_wallbox_info(result["serial"])
         result["firmware_version"] = info.get("firmwareVersion")
-        result["dip_switch_settings"] = info.get("dipSwitchSettings")
     except Exception as exc:
         result["live_fetch_error"] = f"{type(exc).__name__}: {exc}"
     return result

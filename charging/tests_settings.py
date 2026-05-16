@@ -23,7 +23,6 @@ _EICHRECHT_OFFLINE = {
     "serial": None,
     "fingerprint": None,
     "firmware_version": None,
-    "dip_switch_settings": None,
     "live_fetch_error": None,
 }
 
@@ -191,7 +190,6 @@ class SettingsPageTests(TestCase):
             "serial": "00000000",
             "fingerprint": "deadbeef" * 8,
             "firmware_version": "P30 v 3.10.80",
-            "dip_switch_settings": [False, False, True],
             "live_fetch_error": None,
         }
         with patch(
@@ -209,8 +207,7 @@ class SettingsPageTests(TestCase):
             "serial": "00000000",
             "fingerprint": "deadbeef" * 8,
             "firmware_version": None,
-            "dip_switch_settings": None,
-            "live_fetch_error": "TimeoutError: wallbox unreachable",
+                    "live_fetch_error": "TimeoutError: wallbox unreachable",
         }
         with patch(
             "charging.views.fetch_wallbox_status",

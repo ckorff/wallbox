@@ -39,7 +39,7 @@ out of scope. Details siehe CLAUDE.md → Phase 2.7.
 
 `/settings/` mit vier Sektionen: Tariff, Wallbox API
 (encrypted-at-rest via `EncryptedField`), Report recipient,
-Eichrecht info (read-only, mit live gefetchter Firmware/DIP).
+Eichrecht info (read-only, mit live gefetchter Firmware).
 API-Credentials liegen im `AppSettings`-Singleton; `.env` bleibt
 CLI-Fallback. Details siehe CLAUDE.md → Phase 2.8.
 
