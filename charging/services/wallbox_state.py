@@ -29,10 +29,17 @@ def _cache_path() -> Path:
     return Path(settings.MEDIA_ROOT) / ".wallbox_state.json"
 
 
+def format_power_kw(milliwatts: Optional[int]) -> Optional[str]:
+    """Format ``meter.totalActivePower`` (mW on the wire) as ``"X.X kW"``."""
+    if milliwatts is None:
+        return None
+    return f"{milliwatts / 1_000_000:.1f} kW"
+
+
 @dataclass
 class LiveStateView:
     state: Optional[str] = None
-    power_w: Optional[int] = None
+    power_kw_display: Optional[str] = None
     error_code: Optional[str] = None
     fetched_at: Optional[str] = None
     stale: bool = False
@@ -77,12 +84,12 @@ def fetch_live_state() -> LiveStateView:
     try:
         state_payload = client.get_state(serial)
         state = state_payload.get("state")
-        power_w: Optional[int] = None
+        power_kw_display: Optional[str] = None
         error_code: Optional[str] = None
         if state == "CHARGING":
             info = client.get_wallbox_info(serial)
             meter = info.get("meter") or {}
-            power_w = meter.get("totalActivePower")
+            power_kw_display = format_power_kw(meter.get("totalActivePower"))
         elif state == "ERROR":
             info = client.get_wallbox_info(serial)
             error_code = info.get("errorCode") or state_payload.get("errorCode")
@@ -94,7 +101,7 @@ def fetch_live_state() -> LiveStateView:
             )
         return LiveStateView(
             state=cached.get("state"),
-            power_w=cached.get("power_w"),
+            power_kw_display=cached.get("power_kw_display"),
             error_code=cached.get("error_code"),
             fetched_at=cached.get("fetched_at"),
             stale=True,
@@ -105,7 +112,7 @@ def fetch_live_state() -> LiveStateView:
     fetched_at = datetime.now(tz=timezone.utc).isoformat(timespec="seconds")
     view = LiveStateView(
         state=state,
-        power_w=power_w,
+        power_kw_display=power_kw_display,
         error_code=error_code,
         fetched_at=fetched_at,
     )
@@ -126,7 +133,7 @@ def _save_cache(view: LiveStateView) -> None:
     payload = {
         k: v
         for k, v in asdict(view).items()
-        if k in {"state", "power_w", "error_code", "fetched_at"}
+        if k in {"state", "power_kw_display", "error_code", "fetched_at"}
     }
     fd, tmp_path = tempfile.mkstemp(
         dir=path.parent, prefix=".wallbox_state.", suffix=".tmp"

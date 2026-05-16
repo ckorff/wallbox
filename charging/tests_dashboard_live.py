@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from django.test import TestCase, override_settings
 
-from charging.services.wallbox_state import fetch_live_state
+from charging.services.wallbox_state import fetch_live_state, format_power_kw
 
 
 def _write_archived_key(media_root: Path, serial: str = "00000000") -> None:
@@ -65,7 +65,7 @@ class FetchLiveStateTests(TestCase):
             view = fetch_live_state()
 
         self.assertEqual(view.state, "IDLE")
-        self.assertIsNone(view.power_w)
+        self.assertIsNone(view.power_kw_display)
         self.assertFalse(view.stale)
         client.get_state.assert_called_once_with("00000000")
         client.get_wallbox_info.assert_not_called()
@@ -75,7 +75,7 @@ class FetchLiveStateTests(TestCase):
         client = MagicMock()
         client.get_state.return_value = {"state": "CHARGING"}
         client.get_wallbox_info.return_value = {
-            "meter": {"totalActivePower": 11023}
+            "meter": {"totalActivePower": 11_000_000}
         }
 
         with patch(
@@ -85,7 +85,7 @@ class FetchLiveStateTests(TestCase):
             view = fetch_live_state()
 
         self.assertEqual(view.state, "CHARGING")
-        self.assertEqual(view.power_w, 11023)
+        self.assertEqual(view.power_kw_display, "11.0 kW")
         client.get_wallbox_info.assert_called_once_with("00000000")
 
     def test_unreachable_with_no_cache_returns_unreachable_reason(self):
@@ -110,7 +110,7 @@ class FetchLiveStateTests(TestCase):
             json.dumps(
                 {
                     "state": "IDLE",
-                    "power_w": None,
+                    "power_kw_display": None,
                     "error_code": None,
                     "fetched_at": "2026-05-16T08:00:00+00:00",
                 }
@@ -146,3 +146,21 @@ class FetchLiveStateTests(TestCase):
         )
         self.assertEqual(cache["state"], "IDLE")
         self.assertIn("fetched_at", cache)
+
+
+class FormatPowerKwTests(TestCase):
+    def test_bug_observation_round_trips(self):
+        # The original bug report: 5_475_191 mW rendered as "5475191 W".
+        self.assertEqual(format_power_kw(5_475_191), "5.5 kW")
+
+    def test_zero(self):
+        self.assertEqual(format_power_kw(0), "0.0 kW")
+
+    def test_eleven_kw(self):
+        self.assertEqual(format_power_kw(11_000_000), "11.0 kW")
+
+    def test_low_power_edge_case(self):
+        self.assertEqual(format_power_kw(105_000), "0.1 kW")
+
+    def test_none_passes_through(self):
+        self.assertIsNone(format_power_kw(None))

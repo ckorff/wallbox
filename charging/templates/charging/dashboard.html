@@ -61,9 +61,9 @@
               <span class="text-2xl font-medium text-text-muted">Unreachable</span>
             {% endif %}
           </div>
-          {% if live_state.state == "CHARGING" and live_state.power_w %}
+          {% if live_state.state == "CHARGING" and live_state.power_kw_display %}
             <div class="text-sm text-text-secondary mt-2 tabular-nums">
-              {{ live_state.power_w|floatformat:0 }} W
+              {{ live_state.power_kw_display }}
             </div>
           {% endif %}
           {% if live_state.state == "ERROR" and live_state.error_code %}

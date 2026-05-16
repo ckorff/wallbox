@@ -189,10 +189,33 @@ Notes:
 - `ipAddress` here is the wallbox's **internal management IP**, not the customer LAN address
 - `maxCurrent` is in mA, mirrors the DIP switch state (13000 = 13 A)
 - `meter.temperature` is in 1/100 °C (1962 → 19.62 °C)
-- `meter.meterValue` is the lifetime energy meter in Wh
+- `meter.*` fields use milli-units on the wire — see "Units on the wire" below
 - `mvaPublicKey` is the wallbox's Eichrecht public key — archive it once
   to `media/wallbox_mva_public_key.json` in Phase 2.7 (see `ROADMAP.md`)
 - `dipSwitchSettings` is a raw 16-element boolean array; use `/v2/wallboxes/dipswitch/{serial}` for the parsed version
+
+#### Units on the wire
+
+The meter object uses milli-units (and centi-units for temperature),
+not the SI base units the field names suggest. Convert at the display
+boundary; do not rescale into the DB.
+
+| API field                | Wire unit   | To display          |
+|--------------------------|-------------|---------------------|
+| `meter.totalActivePower` | mW          | / 1_000_000 → kW    |
+| `meter.meterValue`       | mWh         | / 1_000_000 → kWh   |
+| `meter.temperature`      | centi-°C    | / 100 → °C          |
+| `meter.lines[].current`  | mA (verify) | / 1000 → A          |
+| `meter.lines[].voltage`  | mV (verify) | / 1000 → V          |
+
+`maxCurrent` on the wallbox object (not in `meter`) is also mA
+(13000 = 13 A) — see note above.
+
+The `(verify)` markers on per-line current/voltage: the wallbox was
+idle during integration so per-phase values were all 0; mA/mV is
+inferred from API consistency with `maxCurrent` and `meterValue`,
+not yet field-verified at non-zero values. Adjust if observed
+otherwise.
 
 #### `GET /v2/wallboxes/{serialNumber}/state` — fast live state
 

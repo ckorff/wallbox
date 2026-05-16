@@ -228,13 +228,13 @@ class DashboardLiveBlockTests(TestCase):
             self,
             LiveStateView(
                 state="CHARGING",
-                power_w=11000,
+                power_kw_display="11.0 kW",
                 fetched_at="2026-05-16T08:00:00+00:00",
             ),
         )
         response = self.client.get(reverse("dashboard"))
         self.assertContains(response, "Charging")
-        self.assertContains(response, "11000 W")
+        self.assertContains(response, "11.0 kW")
         # The live-state card carries the active-glow border when charging.
         self.assertContains(response, "shadow-glow")
 
