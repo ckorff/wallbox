@@ -20,6 +20,10 @@ urlpatterns = [
         '',
         RedirectView.as_view(pattern_name='dashboard', permanent=False),
     ),
+    path(
+        'favicon.ico',
+        RedirectView.as_view(url='/static/img/favicon.ico', permanent=True),
+    ),
     path('', include('charging.urls')),
 ]
 
