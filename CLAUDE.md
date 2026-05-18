@@ -97,6 +97,23 @@ propagated, so the dashboard always renders. Newly imported rows
 surface as a one-time Django success flash; no-ops are silent. The
 manual "Run import now" button remains for forced re-imports.
 
+### Phase 3.1: complete ✅ – tariff document attachment
+Reports emailed from the Reports page now carry the energy-supplier
+tariff PDF as cost evidence. Uploaded via `/settings/#tariff` (new
+"Tariff document" sub-section under the existing tariff price area),
+stored as a `TariffDocument` row with the same `valid_from` history
+shape as `Tariff`. Selection at dispatch resolves
+`TariffDocument.for_date` against the **last day of the report
+month**. Merge is at *send time* in
+`charging/services/pdf_merge.py` via `pypdf` — the stored
+`media/reports/*.pdf` is untouched; the attachment is built fresh
+in memory (report pages first, then tariff) under the unchanged
+filename `charging-report-YYYY-MM.pdf`. Missing-document flow is
+non-blocking: the report is sent on its own and the UI flashes
+"No tariff document on file — report sent without attachment."
+`SentEmail` gained a `tariff_attached: bool` so the Reports view
+can pick the right success message.
+
 ### Later
 Phase 4 — see `docs/ROADMAP.md` for sequencing and content.
 The web UI itself already runs as a permanent systemd-managed Gunicorn
@@ -142,7 +159,8 @@ service (see Development Environment → Deployment).
 - Python 3.11, Django 5.x
 - SQLite (single-user app, nothing more is needed)
 - KEBA integration: documented REST API on :8443, stdlib `urllib` over HTTPS (no third-party HTTP client)
-- WeasyPrint for PDF generation
+- WeasyPrint for PDF generation; `pypdf` for merging the active
+  `TariffDocument` onto outgoing report emails (see Phase 3.1)
 - Web serving: Gunicorn (WSGI) behind no reverse proxy — LAN-only, no HTTPS.
   WhiteNoise serves static files directly from the Gunicorn process.
 - Email delivery: Django's built-in email framework over SMTP; SMTP creds
@@ -233,6 +251,18 @@ python manage.py test
 - `created_at` (auto)
 - Helper: `Tariff.for_date(d)` → most recent tariff with `valid_from <= d`
 
+`TariffDocument` (Phase 3.1 – supplier PDF history, parallel to `Tariff`)
+- `valid_from` (DateField, unique, indexed)
+- `pdf` (FileField, stored under `media/tariff_documents/`)
+- `provider_name` (CharField, max 100; required)
+- `notes` (TextField, blank)
+- `uploaded_at` (auto)
+- Helper: `TariffDocument.for_date(d)` → most recent document with
+  `valid_from <= d`, mirroring `Tariff.for_date`
+- Editable at `/settings/#tariff` (separate POST endpoints
+  `tariff_document_create` / `tariff_document_delete`); delete also
+  removes the file from storage via `pdf.delete(save=False)`
+
 `MonthlyReport` (one row per generated PDF)
 - `year`, `month` (unique together)
 - `pdf` (FileField, stored under `media/reports/`)
@@ -256,6 +286,12 @@ python manage.py test
   month must be handled correctly – do not assume one tariff per month.
 - **Total amount:** `total_amount_eur = energy_cost_eur`. The base fee
   is intentionally not part of the calculation.
+- **Tariff document attachment:** selected at email-send time, not
+  at report-generation time. The stored report PDF in
+  `media/reports/` stays untouched; the merge is built fresh in
+  memory by `charging/services/pdf_merge.py`. Selection key is
+  `TariffDocument.for_date(end_of_report_month)`. No document on
+  file → send the bare report (non-blocking, informational flash).
 - **Billable sessions:** the wallbox emits a short 0-kWh entry for each
   RFID authorization event immediately before the real charge.
   Currently these are tagged with `tokenId = "predefinedTokenId"`
@@ -293,7 +329,10 @@ highlighted.
      - "Open latest report" – link to the most recent `MonthlyReport`'s
        PDF if any, else disabled with a hint.
 2. **Settings** at `/settings/` — four anchored sub-sections:
-   - **Tariff** (`#tariff`): "Add new tariff" form + history table
+   - **Tariff** (`#tariff`): "Add new tariff" form + history table,
+     followed by a "Tariff document" sub-section (upload form +
+     history table with download / delete) — the supplier PDF that
+     gets appended to outgoing reports (Phase 3.1)
    - **Wallbox API** (`#wallbox-api`): username + password for the
      REST API (encrypted via `EncryptedField`; blank-on-submit
      preserves the stored value)

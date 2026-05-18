@@ -18,8 +18,19 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
-from .forms import ReportRecipientForm, TariffForm, WallboxApiForm
-from .models import AppSettings, ChargingSession, MonthlyReport, Tariff
+from .forms import (
+    ReportRecipientForm,
+    TariffDocumentForm,
+    TariffForm,
+    WallboxApiForm,
+)
+from .models import (
+    AppSettings,
+    ChargingSession,
+    MonthlyReport,
+    Tariff,
+    TariffDocument,
+)
 from .services.auto_import import auto_import_if_new_sessions
 from .services.email import ReportEmailError, send_report_email
 from .services.import_runner import run_keba_import
@@ -104,53 +115,89 @@ def dashboard(request):
     )
 
 
+def _render_settings(request, *, section="", overrides=None):
+    today = timezone.localdate()
+    context = {
+        "tariff_form": TariffForm(),
+        "wallbox_form": WallboxApiForm(),
+        "recipient_form": ReportRecipientForm(),
+        "tariff_document_form": TariffDocumentForm(),
+        "tariffs": Tariff.objects.all(),
+        "active_tariff": Tariff.for_date(today),
+        "tariff_documents": TariffDocument.objects.all(),
+        "active_tariff_document": TariffDocument.for_date(today),
+        "eichrecht": fetch_wallbox_status(),
+        "section": section,
+    }
+    if overrides:
+        context.update(overrides)
+    return render(request, "charging/settings.html", context)
+
+
 @staff_member_required
 def settings_page(request):
-    tariff_form = TariffForm()
-    wallbox_form = WallboxApiForm()
-    recipient_form = ReportRecipientForm()
-    section = ""
-
     if request.method == "POST":
         which = request.POST.get("form_name")
         if which == "tariff":
-            tariff_form = TariffForm(request.POST)
-            section = "tariff"
-            if tariff_form.is_valid():
-                tariff_form.save()
+            form = TariffForm(request.POST)
+            if form.is_valid():
+                form.save()
                 messages.success(request, "New tariff saved.")
                 return redirect(reverse("settings_page") + "#tariff")
-        elif which == "wallbox_api":
-            wallbox_form = WallboxApiForm(request.POST)
-            section = "wallbox-api"
-            if wallbox_form.is_valid():
-                wallbox_form.save()
+            return _render_settings(
+                request, section="tariff", overrides={"tariff_form": form}
+            )
+        if which == "wallbox_api":
+            form = WallboxApiForm(request.POST)
+            if form.is_valid():
+                form.save()
                 messages.success(request, "Wallbox API credentials saved.")
                 return redirect(reverse("settings_page") + "#wallbox-api")
-        elif which == "report_recipient":
-            recipient_form = ReportRecipientForm(request.POST)
-            section = "report-recipient"
-            if recipient_form.is_valid():
-                recipient_form.save()
+            return _render_settings(
+                request, section="wallbox-api", overrides={"wallbox_form": form}
+            )
+        if which == "report_recipient":
+            form = ReportRecipientForm(request.POST)
+            if form.is_valid():
+                form.save()
                 messages.success(request, "Report recipient saved.")
                 return redirect(reverse("settings_page") + "#report-recipient")
+            return _render_settings(
+                request,
+                section="report-recipient",
+                overrides={"recipient_form": form},
+            )
 
-    tariffs = Tariff.objects.all()
-    active_tariff = Tariff.for_date(timezone.localdate())
-    eichrecht = fetch_wallbox_status()
-    return render(
-        request,
-        "charging/settings.html",
-        {
-            "tariff_form": tariff_form,
-            "wallbox_form": wallbox_form,
-            "recipient_form": recipient_form,
-            "tariffs": tariffs,
-            "active_tariff": active_tariff,
-            "eichrecht": eichrecht,
-            "section": section,
-        },
-    )
+    return _render_settings(request)
+
+
+@staff_member_required
+def tariff_document_create(request):
+    if request.method != "POST":
+        return redirect(reverse("settings_page") + "#tariff")
+    form = TariffDocumentForm(request.POST, request.FILES)
+    if not form.is_valid():
+        return _render_settings(
+            request,
+            section="tariff",
+            overrides={"tariff_document_form": form},
+        )
+    form.save()
+    messages.success(request, "Tariff document uploaded.")
+    return redirect(reverse("settings_page") + "#tariff")
+
+
+@staff_member_required
+def tariff_document_delete(request, pk):
+    if request.method != "POST":
+        return redirect(reverse("settings_page") + "#tariff")
+    doc = TariffDocument.objects.filter(pk=pk).first()
+    if doc is not None:
+        if doc.pdf:
+            doc.pdf.delete(save=False)
+        doc.delete()
+        messages.success(request, "Tariff document deleted.")
+    return redirect(reverse("settings_page") + "#tariff")
 
 
 def _parse_year_month(raw_year, raw_month):
@@ -224,10 +271,19 @@ def reports_index(request):
                         f"Could not send {label} ({type(exc).__name__}): {exc}",
                     )
                 else:
-                    messages.success(
-                        request,
-                        f"{label} report emailed to {sent.recipient}.",
-                    )
+                    if sent.tariff_attached:
+                        messages.success(
+                            request,
+                            f"{label} report emailed to {sent.recipient} "
+                            f"with tariff document attached.",
+                        )
+                    else:
+                        messages.success(
+                            request,
+                            f"{label} report emailed to {sent.recipient}. "
+                            f"No tariff document on file — report sent "
+                            f"without attachment.",
+                        )
                     return redirect(reverse("reports_index"))
         else:
             year, month = target

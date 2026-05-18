@@ -32,6 +32,24 @@ class Tariff(models.Model):
         return cls.objects.filter(valid_from__lte=d).order_by("-valid_from").first()
 
 
+class TariffDocument(models.Model):
+    valid_from = models.DateField(unique=True, db_index=True)
+    pdf = models.FileField(upload_to="tariff_documents/")
+    provider_name = models.CharField(max_length=100)
+    notes = models.TextField(blank=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-valid_from"]
+
+    def __str__(self):
+        return f"{self.provider_name} (from {self.valid_from:%Y-%m-%d})"
+
+    @classmethod
+    def for_date(cls, d):
+        return cls.objects.filter(valid_from__lte=d).order_by("-valid_from").first()
+
+
 class ChargingSession(models.Model):
     serial = models.CharField(max_length=32)
     started_at = models.DateTimeField()

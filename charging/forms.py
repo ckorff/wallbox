@@ -10,7 +10,7 @@ from decimal import Decimal
 
 from django import forms
 
-from .models import AppSettings, Tariff
+from .models import AppSettings, Tariff, TariffDocument
 
 
 class TariffForm(forms.ModelForm):
@@ -57,6 +57,20 @@ class WallboxApiForm(forms.ModelForm):
             # Blank submission = keep what's already stored.
             return AppSettings.current().keba_api_password
         return value
+
+
+class TariffDocumentForm(forms.ModelForm):
+    pdf = forms.FileField(widget=forms.ClearableFileInput(
+        attrs={"accept": "application/pdf"}
+    ))
+
+    class Meta:
+        model = TariffDocument
+        fields = ["provider_name", "valid_from", "pdf", "notes"]
+        widgets = {
+            "notes": forms.Textarea(attrs={"rows": 3}),
+            "valid_from": forms.DateInput(attrs={"type": "date"}),
+        }
 
 
 class ReportRecipientForm(forms.ModelForm):

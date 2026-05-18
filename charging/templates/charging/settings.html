@@ -80,6 +80,96 @@
       No tariffs recorded yet.
     </div>
   {% endif %}
+
+  <div class="uppercase tracking-[0.14em] text-text-muted text-xs font-medium mt-10 mb-3">
+    Tariff document
+  </div>
+
+  <div class="bg-card border border-[rgba(94,234,255,0.10)] rounded-card p-6 mb-4">
+    <p class="text-text-muted text-sm mb-4">
+      Upload the energy-supplier tariff PDF that gets appended to outgoing reports as proof of cost.
+    </p>
+    <form method="post" enctype="multipart/form-data"
+          action="{% url 'tariff_document_create' %}"
+          class="space-y-4">
+      {% csrf_token %}
+      {% for field in tariff_document_form %}
+        <div class="flex flex-col gap-1 max-w-md">
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}
+            <span class="text-xs text-text-muted">{{ field.help_text }}</span>
+          {% endif %}
+          {{ field.errors }}
+        </div>
+      {% endfor %}
+      <div>
+        <button type="submit"
+                class="inline-flex items-center gap-2 bg-accent hover:bg-accent-hover text-bg font-medium px-4 py-2 rounded-btn transition-colors cursor-pointer">
+          <i class="ti ti-device-floppy"></i>
+          <span>Add tariff document</span>
+        </button>
+      </div>
+    </form>
+  </div>
+
+  {% if tariff_documents %}
+    <div class="bg-card border border-[rgba(94,234,255,0.10)] rounded-card overflow-hidden">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-text-muted uppercase tracking-[0.14em] text-[11px] font-medium">
+            <th class="text-left px-5 py-3">Provider</th>
+            <th class="text-left px-5 py-3">Valid from</th>
+            <th class="text-left px-5 py-3">Uploaded at</th>
+            <th class="text-left px-5 py-3">File</th>
+            <th class="text-right px-5 py-3"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in tariff_documents %}
+            <tr class="border-t border-[rgba(94,234,255,0.08)] hover:bg-row-hover transition-colors
+                       {% if active_tariff_document and d.pk == active_tariff_document.pk %}bg-row-hover{% endif %}">
+              <td class="px-5 py-3 text-text-primary">
+                {{ d.provider_name }}
+                {% if active_tariff_document and d.pk == active_tariff_document.pk %}
+                  <span class="ml-2 inline-flex items-center gap-1 text-accent text-xs uppercase tracking-[0.14em] font-medium">
+                    <i class="ti ti-circle-check-filled"></i>
+                    <span>Active</span>
+                  </span>
+                {% endif %}
+              </td>
+              <td class="px-5 py-3 text-text-primary">{{ d.valid_from|date:"d.m.Y" }}</td>
+              <td class="px-5 py-3 text-text-secondary">{{ d.uploaded_at|date:"d.m.Y H:i" }}</td>
+              <td class="px-5 py-3">
+                <a href="{{ d.pdf.url }}" target="_blank"
+                   class="inline-flex items-center gap-1 text-accent hover:text-accent-hover">
+                  <i class="ti ti-file-download"></i>
+                  <span>Download</span>
+                </a>
+              </td>
+              <td class="px-5 py-3 text-right">
+                <form method="post"
+                      action="{% url 'tariff_document_delete' d.pk %}"
+                      class="inline"
+                      onsubmit="return confirm('Delete this tariff document?')">
+                  {% csrf_token %}
+                  <button type="submit"
+                          class="inline-flex items-center gap-1 text-text-secondary hover:text-red-300 cursor-pointer">
+                    <i class="ti ti-trash"></i>
+                    <span>Delete</span>
+                  </button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="bg-card border border-[rgba(94,234,255,0.10)] rounded-card p-6 text-center text-text-secondary">
+      No tariff documents uploaded yet.
+    </div>
+  {% endif %}
 </section>
 
 {# -------- Wallbox API -------- #}

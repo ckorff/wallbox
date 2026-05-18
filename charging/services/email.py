@@ -8,13 +8,15 @@ exactly what's wrong instead of a generic SMTP traceback.
 """
 from __future__ import annotations
 
+import calendar
 from dataclasses import dataclass
 from datetime import date
 
 from django.conf import settings
 from django.core.mail import EmailMessage
 
-from charging.models import AppSettings, MonthlyReport
+from charging.models import AppSettings, MonthlyReport, TariffDocument
+from charging.services.pdf_merge import merge_report_with_tariff
 
 
 class ReportEmailError(Exception):
@@ -25,17 +27,26 @@ class ReportEmailError(Exception):
 class SentEmail:
     recipient: str
     subject: str
+    tariff_attached: bool = False
 
 
 def _month_label(year: int, month: int) -> str:
     return date(year, month, 1).strftime("%B %Y")
 
 
+def _active_tariff_document(report: MonthlyReport) -> TariffDocument | None:
+    last_day = calendar.monthrange(report.year, report.month)[1]
+    return TariffDocument.for_date(date(report.year, report.month, last_day))
+
+
 def build_report_email(report: MonthlyReport, recipient: str) -> EmailMessage:
     """Build (but don't send) the EmailMessage for a MonthlyReport.
 
     Kept separate from ``send_report_email`` so tests can assert on the
-    composed message without running through Django's mail outbox.
+    composed message without running through Django's mail outbox. If a
+    tariff document is active for the report month, the attachment is
+    the report PDF merged with that tariff PDF; otherwise it's just the
+    report PDF.
     """
     label = _month_label(report.year, report.month)
     subject = f"Charging report — {label}"
@@ -52,9 +63,15 @@ def build_report_email(report: MonthlyReport, recipient: str) -> EmailMessage:
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=[recipient],
     )
-    pdf_bytes = report.pdf.read()
-    report.pdf.close()
     filename = f"charging-report-{report.year}-{report.month:02d}.pdf"
+    tariff_doc = _active_tariff_document(report)
+    if tariff_doc and tariff_doc.pdf:
+        pdf_bytes = merge_report_with_tariff(
+            report.pdf.path, tariff_doc.pdf.path
+        ).getvalue()
+    else:
+        pdf_bytes = report.pdf.read()
+        report.pdf.close()
     message.attach(filename, pdf_bytes, "application/pdf")
     return message
 
@@ -83,4 +100,8 @@ def send_report_email(report: MonthlyReport) -> SentEmail:
 
     message = build_report_email(report, recipient)
     message.send(fail_silently=False)
-    return SentEmail(recipient=recipient, subject=message.subject)
+    return SentEmail(
+        recipient=recipient,
+        subject=message.subject,
+        tariff_attached=_active_tariff_document(report) is not None,
+    )

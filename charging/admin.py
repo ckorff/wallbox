@@ -7,7 +7,7 @@ edited in place, reports must be regenerated through the Reports page.
 """
 from django.contrib import admin
 
-from .models import ChargingSession, MonthlyReport, Tariff
+from .models import ChargingSession, MonthlyReport, Tariff, TariffDocument
 
 
 @admin.register(ChargingSession)
@@ -45,6 +45,12 @@ class TariffAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(TariffDocument)
+class TariffDocumentAdmin(admin.ModelAdmin):
+    list_display = ("valid_from", "provider_name", "uploaded_at")
+    readonly_fields = ("uploaded_at",)
 
 
 @admin.register(MonthlyReport)
