@@ -99,20 +99,26 @@ manual "Run import now" button remains for forced re-imports.
 
 ### Phase 3.1: complete ✅ – tariff document attachment
 Reports emailed from the Reports page now carry the energy-supplier
-tariff PDF as cost evidence. Uploaded via `/settings/#tariff` (new
-"Tariff document" sub-section under the existing tariff price area),
-stored as a `TariffDocument` row with the same `valid_from` history
-shape as `Tariff`. Selection at dispatch resolves
-`TariffDocument.for_date` against the **last day of the report
-month**. Merge is at *send time* in
-`charging/services/pdf_merge.py` via `pypdf` — the stored
-`media/reports/*.pdf` is untouched; the attachment is built fresh
-in memory (report pages first, then tariff) under the unchanged
-filename `charging-report-YYYY-MM.pdf`. Missing-document flow is
-non-blocking: the report is sent on its own and the UI flashes
-"No tariff document on file — report sent without attachment."
-`SentEmail` gained a `tariff_attached: bool` so the Reports view
-can pick the right success message.
+tariff PDF as cost evidence. A tariff is one entry — price plus
+provider + supplier PDF + free-text notes — managed on
+`/settings/#tariff` via a single form and single history table. The
+PDF/provider/notes fields are optional at create time (you can ship a
+tariff before the supplier sends the document) and editable later via
+the admin "Raw data" page; price and `valid_from` stay immutable per
+the historical-data rule. Selection at email-send time resolves
+`Tariff.for_date` against the **last day of the report month** and
+merges the active tariff's PDF onto the report in memory
+(`charging/services/pdf_merge.py`, pypdf) under the unchanged filename
+`charging-report-YYYY-MM.pdf`. The stored `media/reports/*.pdf` is
+untouched. No PDF on the active tariff → bare report ships with an
+informational flash ("No tariff document on file — report sent
+without attachment."). `SentEmail.tariff_attached: bool` drives the
+Reports-view success-message branch.
+
+Migration history note: 0010 briefly modelled the supplier PDF as a
+separate `TariffDocument` table. 0011 folds those fields into
+`Tariff` (copying any rows by matching `valid_from`) and drops
+`TariffDocument`.
 
 ### Later
 Phase 4 — see `docs/ROADMAP.md` for sequencing and content.
@@ -245,23 +251,17 @@ python manage.py test
   imported via the CSV path (which doesn't carry MVA data)
 - Natural key: `(serial, started_at)`
 
-`Tariff` (historical, never edited – new entries instead)
-- `valid_from` (DateField, unique, indexed)
-- `energy_price_ct_per_kwh` (Decimal 6,3) – e.g. `38.500`
+`Tariff` (historical price; supplier-PDF evidence folded in in 3.1)
+- `valid_from` (DateField, unique, indexed) — immutable after create
+- `energy_price_ct_per_kwh` (Decimal 6,3) — immutable after create
+- `provider_name` (CharField, max 100; blank/default '') — editable
+- `pdf` (FileField under `media/tariff_documents/`; blank=True) — editable
+- `notes` (TextField, blank) — editable
 - `created_at` (auto)
 - Helper: `Tariff.for_date(d)` → most recent tariff with `valid_from <= d`
-
-`TariffDocument` (Phase 3.1 – supplier PDF history, parallel to `Tariff`)
-- `valid_from` (DateField, unique, indexed)
-- `pdf` (FileField, stored under `media/tariff_documents/`)
-- `provider_name` (CharField, max 100; required)
-- `notes` (TextField, blank)
-- `uploaded_at` (auto)
-- Helper: `TariffDocument.for_date(d)` → most recent document with
-  `valid_from <= d`, mirroring `Tariff.for_date`
-- Editable at `/settings/#tariff` (separate POST endpoints
-  `tariff_document_create` / `tariff_document_delete`); delete also
-  removes the file from storage via `pdf.delete(save=False)`
+- "Never edit in place" applies to the price/validity boundary
+  fields only; the supplier-PDF metadata is mutable so a document can
+  be attached or replaced via the admin after the tariff was created.
 
 `MonthlyReport` (one row per generated PDF)
 - `year`, `month` (unique together)
@@ -290,8 +290,8 @@ python manage.py test
   at report-generation time. The stored report PDF in
   `media/reports/` stays untouched; the merge is built fresh in
   memory by `charging/services/pdf_merge.py`. Selection key is
-  `TariffDocument.for_date(end_of_report_month)`. No document on
-  file → send the bare report (non-blocking, informational flash).
+  `Tariff.for_date(end_of_report_month).pdf`. Active tariff without
+  a PDF → send the bare report (non-blocking, informational flash).
 - **Billable sessions:** the wallbox emits a short 0-kWh entry for each
   RFID authorization event immediately before the real charge.
   Currently these are tagged with `tokenId = "predefinedTokenId"`
@@ -329,10 +329,10 @@ highlighted.
      - "Open latest report" – link to the most recent `MonthlyReport`'s
        PDF if any, else disabled with a hint.
 2. **Settings** at `/settings/` — four anchored sub-sections:
-   - **Tariff** (`#tariff`): "Add new tariff" form + history table,
-     followed by a "Tariff document" sub-section (upload form +
-     history table with download / delete) — the supplier PDF that
-     gets appended to outgoing reports (Phase 3.1)
+   - **Tariff** (`#tariff`): one form (price + valid_from + optional
+     provider/PDF/notes; multipart) and one history table with the
+     PDF inline as a download link. PDF/provider/notes can be
+     attached or replaced later via the admin "Raw data" page.
    - **Wallbox API** (`#wallbox-api`): username + password for the
      REST API (encrypted via `EncryptedField`; blank-on-submit
      preserves the stored value)

@@ -1,16 +1,35 @@
+import io
+import tempfile
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.files.base import ContentFile
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
+from pypdf import PdfWriter
 
 from charging.models import Tariff
 
 
 User = get_user_model()
+
+
+def _pdf_bytes(pages: int = 1) -> bytes:
+    writer = PdfWriter()
+    for _ in range(pages):
+        writer.add_blank_page(width=200, height=200)
+    buf = io.BytesIO()
+    writer.write(buf)
+    return buf.getvalue()
+
+
+def _pdf_upload(name="vattenfall.pdf"):
+    return SimpleUploadedFile(name, _pdf_bytes(), content_type="application/pdf")
 
 
 class TariffModelTests(TestCase):
@@ -191,3 +210,72 @@ class TariffSettingsViewTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn("energy_price_ct_per_kwh", form.errors)
         self.assertEqual(Tariff.objects.count(), 0)
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp(prefix="wallbox-test-tariff-doc-"))
+class TariffDocumentFieldTests(TestCase):
+    """Coverage for the supplier-PDF fields folded into Tariff."""
+
+    def setUp(self):
+        self.staff_user = User.objects.create_user(
+            username="staff", password="pw", is_staff=True
+        )
+
+    def test_pdf_is_optional_on_create(self):
+        t = Tariff.objects.create(
+            valid_from=date(2026, 5, 1),
+            energy_price_ct_per_kwh=Decimal("38.500"),
+        )
+        self.assertFalse(t.pdf)
+        self.assertEqual(t.provider_name, "")
+        self.assertEqual(t.notes, "")
+
+    def test_filefield_round_trip(self):
+        payload = _pdf_bytes(2)
+        t = Tariff.objects.create(
+            valid_from=date(2026, 5, 1),
+            energy_price_ct_per_kwh=Decimal("38.500"),
+            provider_name="Vattenfall",
+            pdf=ContentFile(payload, name="vattenfall.pdf"),
+        )
+        t.refresh_from_db()
+        with t.pdf.open("rb") as f:
+            self.assertEqual(f.read(), payload)
+        self.assertTrue(Path(t.pdf.path).exists())
+
+    def test_staff_can_create_tariff_with_pdf_via_settings_form(self):
+        self.client.force_login(self.staff_user)
+        response = self.client.post(
+            "/settings/",
+            data={
+                "form_name": "tariff",
+                "valid_from": "01.05.2026",
+                "energy_price_ct_per_kwh": "38.500",
+                "provider_name": "Vattenfall",
+                "notes": "May tariff",
+                "pdf": _pdf_upload(),
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], "/settings/#tariff")
+        self.assertEqual(Tariff.objects.count(), 1)
+        t = Tariff.objects.get()
+        self.assertEqual(t.provider_name, "Vattenfall")
+        self.assertEqual(t.notes, "May tariff")
+        self.assertTrue(t.pdf.name)
+
+    def test_staff_can_create_tariff_without_pdf_via_settings_form(self):
+        self.client.force_login(self.staff_user)
+        response = self.client.post(
+            "/settings/",
+            data={
+                "form_name": "tariff",
+                "valid_from": "01.05.2026",
+                "energy_price_ct_per_kwh": "38.500",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Tariff.objects.count(), 1)
+        t = Tariff.objects.get()
+        self.assertFalse(t.pdf)
+        self.assertEqual(t.provider_name, "")

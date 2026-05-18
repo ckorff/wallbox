@@ -15,7 +15,7 @@ from datetime import date
 from django.conf import settings
 from django.core.mail import EmailMessage
 
-from charging.models import AppSettings, MonthlyReport, TariffDocument
+from charging.models import AppSettings, MonthlyReport, Tariff
 from charging.services.pdf_merge import merge_report_with_tariff
 
 
@@ -34,19 +34,26 @@ def _month_label(year: int, month: int) -> str:
     return date(year, month, 1).strftime("%B %Y")
 
 
-def _active_tariff_document(report: MonthlyReport) -> TariffDocument | None:
+def _active_tariff_with_pdf(report: MonthlyReport) -> Tariff | None:
+    """Return the tariff active at the end of the report month if it
+    carries an attached PDF, else None. The price-only resolution at
+    session time still uses ``Tariff.for_date`` directly; here we only
+    care about the document side."""
     last_day = calendar.monthrange(report.year, report.month)[1]
-    return TariffDocument.for_date(date(report.year, report.month, last_day))
+    tariff = Tariff.for_date(date(report.year, report.month, last_day))
+    if tariff is not None and tariff.pdf:
+        return tariff
+    return None
 
 
 def build_report_email(report: MonthlyReport, recipient: str) -> EmailMessage:
     """Build (but don't send) the EmailMessage for a MonthlyReport.
 
     Kept separate from ``send_report_email`` so tests can assert on the
-    composed message without running through Django's mail outbox. If a
-    tariff document is active for the report month, the attachment is
-    the report PDF merged with that tariff PDF; otherwise it's just the
-    report PDF.
+    composed message without running through Django's mail outbox. If
+    the tariff active for the report month carries an attached supplier
+    PDF, the attachment is the report PDF merged with that PDF; else
+    it's just the report PDF.
     """
     label = _month_label(report.year, report.month)
     subject = f"Charging report — {label}"
@@ -64,10 +71,10 @@ def build_report_email(report: MonthlyReport, recipient: str) -> EmailMessage:
         to=[recipient],
     )
     filename = f"charging-report-{report.year}-{report.month:02d}.pdf"
-    tariff_doc = _active_tariff_document(report)
-    if tariff_doc and tariff_doc.pdf:
+    tariff = _active_tariff_with_pdf(report)
+    if tariff is not None:
         pdf_bytes = merge_report_with_tariff(
-            report.pdf.path, tariff_doc.pdf.path
+            report.pdf.path, tariff.pdf.path
         ).getvalue()
     else:
         pdf_bytes = report.pdf.read()
@@ -103,5 +110,5 @@ def send_report_email(report: MonthlyReport) -> SentEmail:
     return SentEmail(
         recipient=recipient,
         subject=message.subject,
-        tariff_attached=_active_tariff_document(report) is not None,
+        tariff_attached=_active_tariff_with_pdf(report) is not None,
     )

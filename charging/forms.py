@@ -10,7 +10,7 @@ from decimal import Decimal
 
 from django import forms
 
-from .models import AppSettings, Tariff, TariffDocument
+from .models import AppSettings, Tariff
 
 
 class TariffForm(forms.ModelForm):
@@ -22,10 +22,22 @@ class TariffForm(forms.ModelForm):
         ),
         help_text="Format: DD.MM.YYYY (e.g. 01.05.2026)",
     )
+    pdf = forms.FileField(
+        required=False,
+        widget=forms.ClearableFileInput(attrs={"accept": "application/pdf"}),
+        help_text="Optional — supplier tariff PDF appended to outgoing reports.",
+    )
 
     class Meta:
         model = Tariff
-        fields = ["valid_from", "energy_price_ct_per_kwh"]
+        fields = [
+            "valid_from",
+            "energy_price_ct_per_kwh",
+            "provider_name",
+            "pdf",
+            "notes",
+        ]
+        widgets = {"notes": forms.Textarea(attrs={"rows": 3})}
 
     def clean_energy_price_ct_per_kwh(self):
         value = self.cleaned_data["energy_price_ct_per_kwh"]
@@ -57,20 +69,6 @@ class WallboxApiForm(forms.ModelForm):
             # Blank submission = keep what's already stored.
             return AppSettings.current().keba_api_password
         return value
-
-
-class TariffDocumentForm(forms.ModelForm):
-    pdf = forms.FileField(widget=forms.ClearableFileInput(
-        attrs={"accept": "application/pdf"}
-    ))
-
-    class Meta:
-        model = TariffDocument
-        fields = ["provider_name", "valid_from", "pdf", "notes"]
-        widgets = {
-            "notes": forms.Textarea(attrs={"rows": 3}),
-            "valid_from": forms.DateInput(attrs={"type": "date"}),
-        }
 
 
 class ReportRecipientForm(forms.ModelForm):

@@ -18,19 +18,8 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
-from .forms import (
-    ReportRecipientForm,
-    TariffDocumentForm,
-    TariffForm,
-    WallboxApiForm,
-)
-from .models import (
-    AppSettings,
-    ChargingSession,
-    MonthlyReport,
-    Tariff,
-    TariffDocument,
-)
+from .forms import ReportRecipientForm, TariffForm, WallboxApiForm
+from .models import AppSettings, ChargingSession, MonthlyReport, Tariff
 from .services.auto_import import auto_import_if_new_sessions
 from .services.email import ReportEmailError, send_report_email
 from .services.import_runner import run_keba_import
@@ -121,11 +110,8 @@ def _render_settings(request, *, section="", overrides=None):
         "tariff_form": TariffForm(),
         "wallbox_form": WallboxApiForm(),
         "recipient_form": ReportRecipientForm(),
-        "tariff_document_form": TariffDocumentForm(),
         "tariffs": Tariff.objects.all(),
         "active_tariff": Tariff.for_date(today),
-        "tariff_documents": TariffDocument.objects.all(),
-        "active_tariff_document": TariffDocument.for_date(today),
         "eichrecht": fetch_wallbox_status(),
         "section": section,
     }
@@ -139,7 +125,7 @@ def settings_page(request):
     if request.method == "POST":
         which = request.POST.get("form_name")
         if which == "tariff":
-            form = TariffForm(request.POST)
+            form = TariffForm(request.POST, request.FILES)
             if form.is_valid():
                 form.save()
                 messages.success(request, "New tariff saved.")
@@ -169,35 +155,6 @@ def settings_page(request):
             )
 
     return _render_settings(request)
-
-
-@staff_member_required
-def tariff_document_create(request):
-    if request.method != "POST":
-        return redirect(reverse("settings_page") + "#tariff")
-    form = TariffDocumentForm(request.POST, request.FILES)
-    if not form.is_valid():
-        return _render_settings(
-            request,
-            section="tariff",
-            overrides={"tariff_document_form": form},
-        )
-    form.save()
-    messages.success(request, "Tariff document uploaded.")
-    return redirect(reverse("settings_page") + "#tariff")
-
-
-@staff_member_required
-def tariff_document_delete(request, pk):
-    if request.method != "POST":
-        return redirect(reverse("settings_page") + "#tariff")
-    doc = TariffDocument.objects.filter(pk=pk).first()
-    if doc is not None:
-        if doc.pdf:
-            doc.pdf.delete(save=False)
-        doc.delete()
-        messages.success(request, "Tariff document deleted.")
-    return redirect(reverse("settings_page") + "#tariff")
 
 
 def _parse_year_month(raw_year, raw_month):
