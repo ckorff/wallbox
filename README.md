@@ -22,7 +22,8 @@ employer that reimburses charging an EV company car at home).
   an Eichrecht-compliant footer (wallbox serial + MVA public-key
   fingerprint).
 - **Emails the PDF** via Django's SMTP backend to the address stored in
-  the app's settings.
+  the app's settings, with every tariff document referenced by a session
+  in the month merged on as cost evidence.
 
 The wallbox's MVA-signed records (Eichrecht / German calibration law)
 are stored verbatim per session, so the raw signed data is available
@@ -85,6 +86,9 @@ plan and `CLAUDE.md` for what actually landed):
 7. **Phase 2.9** — dashboard live state + monthly summary
 8. **Phase 3** — SMTP email delivery + dashboard-driven auto-import
    (instead of a systemd timer)
+9. **Phase 3.1** — supplier tariff PDFs merged onto outgoing reports;
+   when a month spans a price change, every referenced tariff's
+   document is attached
 
 ## License
 
