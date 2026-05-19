@@ -98,22 +98,27 @@ surface as a one-time Django success flash; no-ops are silent. The
 manual "Run import now" button remains for forced re-imports.
 
 ### Phase 3.1: complete ✅ – tariff document attachment
-Reports emailed from the Reports page now carry the energy-supplier
-tariff PDF as cost evidence. A tariff is one entry — price plus
+Reports emailed from the Reports page carry the energy-supplier
+tariff PDFs as cost evidence. A tariff is one entry — price plus
 provider + supplier PDF + free-text notes — managed on
 `/settings/#tariff` via a single form and single history table. The
 PDF/provider/notes fields are optional at create time (you can ship a
 tariff before the supplier sends the document) and editable later via
-the admin "Raw data" page; price and `valid_from` stay immutable per
-the historical-data rule. Selection at email-send time resolves
-`Tariff.for_date` against the **last day of the report month** and
-merges the active tariff's PDF onto the report in memory
-(`charging/services/pdf_merge.py`, pypdf) under the unchanged filename
+the admin "Raw data" page. Selection at email-send time walks the
+report month's sessions, resolves each session's tariff via
+`Tariff.for_date(session.date)`, de-duplicates, and merges every
+referenced tariff PDF onto the report in memory
+(`charging/services/pdf_merge.py`, pypdf) in **reverse-chronological**
+order (newest first) under the unchanged filename
 `charging-report-YYYY-MM.pdf`. The stored `media/reports/*.pdf` is
-untouched. No PDF on the active tariff → bare report ships with an
-informational flash ("No tariff document on file — report sent
-without attachment."). `SentEmail.tariff_attached: bool` drives the
-Reports-view success-message branch.
+untouched. Referenced tariffs without a PDF on file are listed in the
+success flash but don't block sending. Quiet months (no sessions)
+fall back to the tariff active at the last day of the month so the
+email still carries supplier evidence. `SentEmail.tariffs_attached`
+and `SentEmail.tariffs_missing` (tuples of provider labels) drive the
+Reports-view success-message branch; the legacy `tariff_attached`
+boolean stays available as a `@property` for callers that only need
+"was anything attached?".
 
 Migration history note: 0010 briefly modelled the supplier PDF as a
 separate `TariffDocument` table. 0011 folds those fields into
@@ -289,9 +294,12 @@ python manage.py test
 - **Tariff document attachment:** selected at email-send time, not
   at report-generation time. The stored report PDF in
   `media/reports/` stays untouched; the merge is built fresh in
-  memory by `charging/services/pdf_merge.py`. Selection key is
-  `Tariff.for_date(end_of_report_month).pdf`. Active tariff without
-  a PDF → send the bare report (non-blocking, informational flash).
+  memory by `charging/services/pdf_merge.py`. Selection: every
+  tariff referenced by a session in the report month (de-duplicated),
+  merged in reverse-chronological order after the report PDF.
+  Referenced tariffs without a PDF on file are surfaced in the
+  success flash but don't block sending. A month with no sessions
+  falls back to `Tariff.for_date(end_of_report_month)`.
 - **Billable sessions:** the wallbox emits a short 0-kWh entry for each
   RFID authorization event immediately before the real charge.
   Currently these are tagged with `tokenId = "predefinedTokenId"`

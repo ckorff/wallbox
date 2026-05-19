@@ -228,11 +228,28 @@ def reports_index(request):
                         f"Could not send {label} ({type(exc).__name__}): {exc}",
                     )
                 else:
-                    if sent.tariff_attached:
+                    attached = sent.tariffs_attached
+                    missing = sent.tariffs_missing
+                    if attached:
+                        n = len(attached)
+                        noun = "document" if n == 1 else "documents"
+                        msg = (
+                            f"{label} report emailed to {sent.recipient} "
+                            f"with {n} tariff {noun} attached: "
+                            f"{', '.join(attached)}."
+                        )
+                        if missing:
+                            msg += (
+                                f" No PDF on file for: {', '.join(missing)}."
+                            )
+                        messages.success(request, msg)
+                    elif missing:
                         messages.success(
                             request,
-                            f"{label} report emailed to {sent.recipient} "
-                            f"with tariff document attached.",
+                            f"{label} report emailed to {sent.recipient}. "
+                            f"No tariff document on file for "
+                            f"{', '.join(missing)} — report sent without "
+                            f"attachment.",
                         )
                     else:
                         messages.success(
