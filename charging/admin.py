@@ -1,9 +1,7 @@
 """Django-admin registrations — surfaced in the UI as the "Raw data" tab.
 
-Sessions are read/write so the user can drop a row to force a re-import
-(see ``charging.services.auto_import``). Tariffs and MonthlyReports are
-deliberately read-only here: tariffs are historical and must never be
-edited in place, reports must be regenerated through the Reports page.
+Sessions and Tariffs are read/write. MonthlyReports stay read-only and
+must be regenerated through the Reports page.
 """
 from django.contrib import admin
 
@@ -32,20 +30,7 @@ class TariffAdmin(admin.ModelAdmin):
         "provider_name",
         "created_at",
     )
-    # Price and validity boundaries are historical and must never be
-    # edited in place. The document/metadata fields are mutable so a
-    # PDF can be attached or replaced after the tariff was created.
-    readonly_fields = (
-        "valid_from",
-        "energy_price_ct_per_kwh",
-        "created_at",
-    )
-
-    def has_add_permission(self, request):
-        return False
-
-    def has_delete_permission(self, request, obj=None):
-        return False
+    readonly_fields = ("created_at",)
 
 
 @admin.register(MonthlyReport)
